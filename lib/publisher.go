@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 
-	"golang.org/x/tools/go/packages"
 	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/api/resource"
 	"sigs.k8s.io/kustomize/kustomize/v5/commands/build"
@@ -16,21 +15,13 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
-type Package struct {
-	Resources ResourceList
-	*packages.Package
-}
-
-func (p Package) localPathOutput() string {
-	pkgRelPath, err := filepath.Rel(p.Module.Dir, p.Dir)
-	if err != nil {
-		panic(err)
-	}
-	return filepath.Join(p.Module.Dir, "zz_generated", pkgRelPath)
-}
+// type Package struct {
+// 	Resources ResourceList
+// 	*packages.Package
+// }
 
 type PackagePublisher interface {
-	Publish(Package) error
+	Publish(ResourceList) error
 }
 
 const (
@@ -47,14 +38,14 @@ func KustomizePublisher() PackagePublisher {
 var _ PackagePublisher = kustomizePublisher{}
 
 // Publish implements PackagePublisher.
-func (k kustomizePublisher) Publish(p Package) error {
+func (k kustomizePublisher) Publish(resources ResourceList) error {
 	rm := resmap.New()
-	p.Resources.ForEach(func(r *Resource) {
+	resources.ForEach(func(r *Resource) {
 		rm.Append(&resource.Resource{
 			RNode: *r.rnode.Copy(),
 		})
 	})
-	outputDir := p.localPathOutput()
+	outputDir := localPathOutput()
 
 	// Check if directory is empty or contains .kimerize file
 	entries, err := os.ReadDir(outputDir)
@@ -85,12 +76,12 @@ type localPackagePublisher struct {
 }
 
 // Publish implements PackagePublisher.
-func (l localPackagePublisher) Publish(p Package) error {
+func (l localPackagePublisher) Publish(resources ResourceList) error {
 	writer := kio.LocalPackageWriter{
-		PackagePath: p.localPathOutput(),
+		PackagePath: localPathOutput(),
 	}
 	nodes := []*yaml.RNode{}
-	p.Resources.ForEach(func(r *Resource) {
+	resources.ForEach(func(r *Resource) {
 		nodes = append(nodes, r.rnode.Copy())
 	})
 	return writer.Write(nodes)

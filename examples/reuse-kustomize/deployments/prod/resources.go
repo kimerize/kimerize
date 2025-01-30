@@ -1,3 +1,4 @@
+//go:generate go run ./
 package main
 
 import (
@@ -5,6 +6,10 @@ import (
 	. "github.com/kimerize/kimerize/lib"
 )
 
-var Resources ResourceList = BuildKustomizeLayer("all", EmbedFilesysBuilder(multibases.FS))
-
-var Publisher PackagePublisher = KustomizePublisher()
+func main() {
+	FailOnError(
+		KustomizePublisher().Publish(
+			BuildKustomizeLayer("all", EmbedFilesysBuilder(multibases.FS)),
+		),
+	)
+}

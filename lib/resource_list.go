@@ -57,20 +57,15 @@ type ResourceList struct {
 	errors    []tracerr.Error
 }
 
-func (rl *ResourceList) Error(err error) {
-	rl.errors = append(rl.errors, tracerr.Wrap(err))
-}
-
-func (rl *ResourceList) Fatal(err error) {
-	rl.errors = append(rl.errors, tracerr.Wrap(err))
-	// TODO: interrupt processing
-}
+// func (rl *ResourceList) Error(err error) {
+// 	rl.errors = append(rl.errors, tracerr.Wrap(err))
+// }
 
 func (rl *ResourceList) ForEach(f func(*Resource)) {
 	for i, r := range rl.resources {
 		f(r)
 		if err := checkDuplicates(rl.resources[:i], *r); err != nil {
-			rl.Fatal(err)
+			FailOnError(err)
 		}
 	}
 }

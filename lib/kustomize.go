@@ -37,7 +37,7 @@ func BuildKustomization(k types.Kustomization, builder func(fs filesys.FileSyste
 
 func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error) (result ResourceList) {
 	if !filepath.IsLocal(path) {
-		result.Fatal(fmt.Errorf("path must be local"))
+		FailOnError(fmt.Errorf("path must be local"))
 	}
 	options := krusty.MakeDefaultOptions()
 	options.PluginConfig.HelmConfig.Enabled = true
@@ -45,13 +45,13 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 
 	tmpDir, err := os.MkdirTemp("", "kustomize-*")
 	if err != nil {
-		result.Fatal(err)
+		FailOnError(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
 	inMemoryFileSystem := filesys.MakeFsInMemory()
 	if err := buildFS(inMemoryFileSystem); err != nil {
-		result.Fatal(err)
+		FailOnError(err)
 	}
 
 	fs := filesys.MakeFsOnDisk()
@@ -71,13 +71,13 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 	})
 
 	if err != nil {
-		result.Fatal(err)
+		FailOnError(err)
 	}
 
 	k := krusty.MakeKustomizer(options)
 	rm, err := k.Run(fs, filepath.Join(tmpDir, path))
 	if err != nil {
-		result.Fatal(err)
+		FailOnError(err)
 	}
 	for _, r := range rm.Resources() {
 		result.Append(ResourceFrom(r.RNode))
