@@ -26,7 +26,16 @@ func WriteKustomization(fs filesys.FileSystem, kustomization types.Kustomization
 	return nil
 }
 
-func KustomizeBuild(path string, buildFS func(fs filesys.FileSystem) error) (result ResourceList) {
+func BuildKustomization(k types.Kustomization, builder func(fs filesys.FileSystem) error) ResourceList {
+	return BuildKustomizeLayer(".", func(fs filesys.FileSystem) error {
+		if err := builder(fs); err != nil {
+			return err
+		}
+		return WriteKustomization(fs, k)
+	})
+}
+
+func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error) (result ResourceList) {
 	if !filepath.IsLocal(path) {
 		result.Fatal(fmt.Errorf("path must be local"))
 	}
@@ -37,7 +46,6 @@ func KustomizeBuild(path string, buildFS func(fs filesys.FileSystem) error) (res
 	tmpDir, err := os.MkdirTemp("", "kustomize-*")
 	if err != nil {
 		result.Fatal(err)
-		return
 	}
 	defer os.RemoveAll(tmpDir)
 

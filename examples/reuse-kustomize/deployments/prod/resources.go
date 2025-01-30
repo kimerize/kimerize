@@ -5,6 +5,6 @@ import (
 	. "github.com/kimerize/kimerize/lib"
 )
 
-var Resources ResourceList = KustomizeBuild("all", EmbedFilesysBuilder(multibases.FS))
+var Resources ResourceList = BuildKustomizeLayer("all", EmbedFilesysBuilder(multibases.FS))
 
 var Publisher PackagePublisher = KustomizePublisher()

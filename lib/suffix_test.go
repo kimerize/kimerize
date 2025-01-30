@@ -32,7 +32,7 @@ import (
 // }
 
 func TestModifyAs(t *testing.T) {
-	rl := KustomizeBuild(".", func(fs filesys.FileSystem) error {
+	rl := BuildKustomizeLayer(".", func(fs filesys.FileSystem) error {
 		return WriteKustomization(fs, kusttypes.Kustomization{
 			ConfigMapGenerator: []kusttypes.ConfigMapArgs{{
 				GeneratorArgs: kusttypes.GeneratorArgs{
@@ -68,7 +68,7 @@ spec:
             name: foo
   `))
 	assert.NoError(t, err)
-	rm := KustomizeBuild(".", func(fs filesys.FileSystem) error {
+	rm := BuildKustomizeLayer(".", func(fs filesys.FileSystem) error {
 		return WriteKustomization(fs, kusttypes.Kustomization{
 			Resources: []string{"pod.yaml"},
 			ConfigMapGenerator: []kusttypes.ConfigMapArgs{{
