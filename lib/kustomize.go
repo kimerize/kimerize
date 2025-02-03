@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	kimerize_filesys "github.com/kimerize/kimerize/lib/filesys"
 	"sigs.k8s.io/kustomize/api/konfig"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/api/types"
@@ -49,7 +50,7 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	inMemoryFileSystem := filesys.MakeFsInMemory()
+	inMemoryFileSystem := kimerize_filesys.MakeFsInMemory()
 	if err := buildFS(inMemoryFileSystem); err != nil {
 		FailOnError(err)
 	}
