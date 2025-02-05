@@ -2,10 +2,12 @@ package lib
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"regexp"
 
 	"k8s.io/apimachinery/pkg/types"
+	k8sjson "sigs.k8s.io/json"
 	"sigs.k8s.io/kustomize/api/hasher"
 	"sigs.k8s.io/kustomize/kyaml/openapi"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
@@ -35,19 +37,14 @@ var h = &hasher.Hasher{}
 // }
 
 func ModifyAs[T any](r *Resource, fn func(*T)) {
-	if rnode, ok := any(r.rnode).(T); ok {
-		fn(&rnode)
-		return
-	}
-
 	var t T
 
-	b, err := r.rnode.MarshalJSON()
+	b, err := json.Marshal(r.object)
 	if err != nil {
 		// TODO:
 	}
-	err = json.Unmarshal(b, &t)
-	if err != nil {
+	strictErrs, err := k8sjson.UnmarshalStrict(b, &t, k8sjson.DisallowUnknownFields, k8sjson.DisallowDuplicateFields)
+	if err := errors.Join(append(strictErrs, err)...); err != nil {
 		// TODO:
 	}
 
@@ -57,12 +54,12 @@ func ModifyAs[T any](r *Resource, fn func(*T)) {
 	if err != nil {
 		// TODO:
 	}
-	modified, err := yaml.Parse(string(b))
+	newObject := make(map[string]any)
+	err = json.Unmarshal(b, &newObject)
 	if err != nil {
 		// TODO:
 	}
-
-	r.rnode.SetYNode(modified.YNode())
+	r.object = newObject
 }
 
 type valueSetterWalker struct {
@@ -119,39 +116,45 @@ func ModifyHashSuffixedResource[T any](rl ResourceList, name types.NamespacedNam
 	var foundName string
 	var newName string
 	for _, r := range rl.resources {
-		if r.rnode.GetKind() != kind {
+		rnode := r.rnode()
+		if rnode.GetKind() != kind {
 			continue
 		}
-		copy := r.rnode.Copy()
+		copy := rnode.Copy()
 		re := regexp.MustCompile(`(^.+)-([a-z0-9]{10})$`)
 		if match := re.FindStringSubmatch(copy.GetName()); match != nil {
-			if name.Name != match[1] || r.rnode.GetNamespace() != name.Namespace {
+			if name.Name != match[1] || rnode.GetNamespace() != name.Namespace {
 				continue
 			}
 			copy.SetName(name.Name)
 			wantedHash := match[2]
 			if gotHash, _ := h.Hash(copy); wantedHash == gotHash {
-				foundName = r.rnode.GetName()
+				foundName = rnode.GetName()
 				ModifyAs(r, fn)
-				newHash, _ := h.Hash(&r.rnode)
-				r.rnode.SetName(name.Name + "-" + newHash)
-				newName = r.rnode.GetName()
+				newHash, _ := h.Hash(r.rnode())
+				ModifyAs(r, func(r *yaml.RNode) {
+					r.SetName(name.Name + "-" + newHash)
+					newName = r.GetName()
+				})
 			}
 			break
 		}
 	}
 
 	for _, r := range rl.resources {
-		if r.rnode.GetKind() == kind && r.rnode.GetName() == newName {
+		rnode := r.rnode()
+		if rnode.GetKind() == kind && rnode.GetName() == newName {
 			continue
 		}
-		_, err := walk.Walker{
-			Visitor: &valueSetterWalker{value: foundName, newValue: newName},
-			Sources: walk.Sources{&r.rnode},
-		}.Walk()
-		if err != nil {
-			// TODO: handle error
-		}
+		ModifyAs(r, func(r *yaml.RNode) {
+			_, err := walk.Walker{
+				Visitor: &valueSetterWalker{value: foundName, newValue: newName},
+				Sources: walk.Sources{r},
+			}.Walk()
+			if err != nil {
+				// TODO: handle error
+			}
+		})
 
 	}
 }

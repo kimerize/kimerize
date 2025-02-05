@@ -41,8 +41,12 @@ var _ PackagePublisher = kustomizePublisher{}
 func (k kustomizePublisher) Publish(resources ResourceList) error {
 	rm := resmap.New()
 	resources.ForEach(func(r *Resource) {
+		rnode, err := yaml.FromMap(r.object)
+		if err != nil {
+			panic(err)
+		}
 		rm.Append(&resource.Resource{
-			RNode: *r.rnode.Copy(),
+			RNode: *rnode,
 		})
 	})
 	outputDir := localPathOutput()
@@ -82,7 +86,11 @@ func (l localPackagePublisher) Publish(resources ResourceList) error {
 	}
 	nodes := []*yaml.RNode{}
 	resources.ForEach(func(r *Resource) {
-		nodes = append(nodes, r.rnode.Copy())
+		rnode, err := yaml.FromMap(r.object)
+		if err != nil {
+			panic(err)
+		}
+		nodes = append(nodes, rnode)
 	})
 	return writer.Write(nodes)
 }

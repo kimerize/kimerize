@@ -1,65 +1,81 @@
 package lib
 
 import (
+	"encoding/json"
 	"fmt"
 
-	"github.com/ztrue/tracerr"
 	"sigs.k8s.io/kustomize/kyaml/resid"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 type Resource struct {
-	rnode yaml.RNode
+	// rnode yaml.RNode
+	object map[string]any
+}
+
+func (r *Resource) rnode() *yaml.RNode {
+	rnode, err := yaml.FromMap(r.object)
+	if err != nil {
+		// TODO: handle error
+	}
+	return rnode
 }
 
 func ResourceFrom[T any](o T) Resource {
-	if r, ok := any(o).(Resource); ok {
-		return r
-	} else if r, ok := any(o).(*yaml.RNode); ok {
-		return Resource{rnode: *r.Copy()}
-	} else if r, ok := any(o).(yaml.RNode); ok {
-		return Resource{rnode: *r.Copy()}
+	resource := Resource{
+		object: make(map[string]any),
 	}
-
-	// TODO: marshal, unmarshal, and return Resource
-	panic("for now...")
-	// return Resource{RNode: yaml.MustParse(o)}
+	var err error
+	switch o := any(o).(type) {
+	case yaml.RNode:
+		resource.object, err = o.Map()
+	case *yaml.RNode:
+		resource.object, err = o.Map()
+	case Resource:
+		return o
+	default:
+		var b []byte
+		b, err = json.Marshal(o)
+		if err != nil {
+			break
+		}
+		err = json.Unmarshal(b, &resource.object)
+		if err != nil {
+			break
+		}
+	}
+	if err != nil {
+		// TODO: handle error
+	}
+	return resource
 }
 
 // String implements fmt.Stringer.
 func (r Resource) String() string {
+	rnode := r.rnode()
 	return fmt.Sprintf(
 		"%s/%s %s/%s",
-		r.rnode.GetApiVersion(), r.rnode.GetKind(), r.rnode.GetNamespace(), r.rnode.GetName(),
+		rnode.GetApiVersion(), rnode.GetKind(), rnode.GetNamespace(), rnode.GetName(),
 	)
 }
 
 var _ fmt.Stringer = Resource{}
 
 func (r *Resource) SetLabel(key, value string) {
-	_, err := yaml.LabelSetter{
-		Key:   key,
-		Value: value,
-	}.Filter(&r.rnode)
-	if err != nil {
-		panic(err)
-	}
+	ModifyAs(r, func(r *yaml.RNode) {
+		_, err := yaml.LabelSetter{
+			Key:   key,
+			Value: value,
+		}.Filter(r)
+		if err != nil {
+			panic(err)
+		}
+	})
 }
-
-// type ResourceList interface {
-// 	Append(Resource)
-// 	AppendAll(ResourceList)
-// 	ForEach(func(Resource))
-// }
 
 type ResourceList struct {
 	resources []*Resource
-	errors    []tracerr.Error
 }
-
-// func (rl *ResourceList) Error(err error) {
-// 	rl.errors = append(rl.errors, tracerr.Wrap(err))
-// }
 
 func (rl *ResourceList) ForEach(f func(*Resource)) {
 	for i, r := range rl.resources {
@@ -72,12 +88,14 @@ func (rl *ResourceList) ForEach(f func(*Resource)) {
 
 func checkDuplicates(resources []*Resource, r Resource) error {
 	for _, existing := range resources {
-		existingGroup, _ := resid.ParseGroupVersion(existing.rnode.GetApiVersion())
-		rGroup, _ := resid.ParseGroupVersion(r.rnode.GetApiVersion())
+		existingRnode := existing.rnode()
+		rnode := r.rnode()
+		existingGroup, _ := resid.ParseGroupVersion(existingRnode.GetApiVersion())
+		rGroup, _ := resid.ParseGroupVersion(rnode.GetApiVersion())
 		if existingGroup == rGroup &&
-			existing.rnode.GetKind() == r.rnode.GetKind() &&
-			existing.rnode.GetName() == r.rnode.GetName() &&
-			existing.rnode.GetNamespace() == r.rnode.GetNamespace() {
+			existingRnode.GetKind() == rnode.GetKind() &&
+			existingRnode.GetName() == rnode.GetName() &&
+			existingRnode.GetNamespace() == rnode.GetNamespace() {
 			return fmt.Errorf(
 				"resource %s already exists in list",
 				r,
@@ -97,21 +115,12 @@ func (rl *ResourceList) Append(r Resource) error {
 }
 
 func (rl *ResourceList) Absorb(other ResourceList) error {
-	rl.errors = append(rl.errors, other.errors...)
 	for _, r := range other.resources {
 		if err := rl.Append(*r); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// func (rl *ResourceList) Resources() []*Resource {
-// 	return rl.resources
-// }
-
-func (rl *ResourceList) Errors() []tracerr.Error {
-	return rl.errors
 }
 
 func NewResourceList() *ResourceList {

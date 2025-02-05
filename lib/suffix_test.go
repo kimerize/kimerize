@@ -11,50 +11,28 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
-// func TestModifyHashSuffixedResource(t *testing.T) {
-// 	rm := KustomizeBuild(types.Kustomization{
-// 		ConfigMapGenerator: []types.ConfigMapArgs{{
-// 			GeneratorArgs: types.GeneratorArgs{
-// 				Name:          "foo",
-// 				KvPairSources: types.KvPairSources{LiteralSources: []string{"foo=bar"}},
-// 			},
-// 		}},
-// 	}, filesys.MakeFsInMemory())
-
-// 	assert.Equal(t, "foo-798k5k7g9f", rm.Resources()[0].GetName())
-// 	ModifyHashSuffixedResource(rm, "foo", func(r *yaml.RNode) {
-// 		r.SetMapField(yaml.NewScalarRNode("bar1"), "data", "foo1")
-// 	})
-// 	assert.Equal(t, "foo-6g8k979h6t", rm.Resources()[0].GetName())
-// 	newField, err := rm.Resources()[0].GetFieldValue("data.foo1")
-// 	assert.NoError(t, err)
-// 	assert.Equal(t, "bar1", newField)
-// }
-
 func TestModifyAs(t *testing.T) {
-	rl := BuildKustomizeLayer(".", func(fs filesys.FileSystem) error {
-		return WriteKustomization(fs, kusttypes.Kustomization{
-			ConfigMapGenerator: []kusttypes.ConfigMapArgs{{
-				GeneratorArgs: kusttypes.GeneratorArgs{
-					Name:          "foo",
-					KvPairSources: kusttypes.KvPairSources{LiteralSources: []string{"foo=bar"}},
-					Options:       &kusttypes.GeneratorOptions{DisableNameSuffixHash: true},
-				},
-			}},
-		})
-	})
+	rl := BuildKustomization(kusttypes.Kustomization{
+		ConfigMapGenerator: []kusttypes.ConfigMapArgs{{
+			GeneratorArgs: kusttypes.GeneratorArgs{
+				Name:          "foo",
+				KvPairSources: kusttypes.KvPairSources{LiteralSources: []string{"foo=bar"}},
+				Options:       &kusttypes.GeneratorOptions{DisableNameSuffixHash: true},
+			},
+		}},
+	}, NoFilesystem())
 
 	ModifyAs(rl.resources[0], func(cm *corev1.ConfigMap) {
 		cm.Data["foo1"] = "bar1"
 	})
-	newField, err := rl.resources[0].rnode.GetFieldValue("data.foo1")
+	newField, err := rl.resources[0].rnode().GetFieldValue("data.foo1")
 	assert.NoError(t, err)
 	assert.Equal(t, "bar1", newField)
 }
 
-func TestModifyHashSuffixedResource2(t *testing.T) {
-	fs := filesys.MakeFsInMemory()
-	err := fs.WriteFile("pod.yaml", []byte(`
+func TestModifyHashSuffixedResource(t *testing.T) {
+	fsBuilder := func(fs filesys.FileSystem) error {
+		return fs.WriteFile("pod.yaml", []byte(`
 apiVersion: v1
 kind: Pod
 metadata:
@@ -67,33 +45,33 @@ spec:
         - configMapRef:
             name: foo
   `))
-	assert.NoError(t, err)
-	rm := BuildKustomizeLayer(".", func(fs filesys.FileSystem) error {
-		return WriteKustomization(fs, kusttypes.Kustomization{
-			Resources: []string{"pod.yaml"},
-			ConfigMapGenerator: []kusttypes.ConfigMapArgs{{
-				GeneratorArgs: kusttypes.GeneratorArgs{
-					Name:          "foo",
-					KvPairSources: kusttypes.KvPairSources{LiteralSources: []string{"foo=bar"}},
-				},
-			}},
-		})
-	})
+	}
+	rm := BuildKustomization(kusttypes.Kustomization{
+		Resources: []string{"pod.yaml"},
+		ConfigMapGenerator: []kusttypes.ConfigMapArgs{{
+			GeneratorArgs: kusttypes.GeneratorArgs{
+				Name:          "foo",
+				KvPairSources: kusttypes.KvPairSources{LiteralSources: []string{"foo=bar"}},
+			},
+		}},
+	},
+		fsBuilder,
+	)
 
 	assert := func(name string, newField string) {
 		assert.Equal(t, 2, len(rm.resources))
 		for _, r := range rm.resources {
-			if r.rnode.GetKind() == "Pod" {
+			if r.rnode().GetKind() == "Pod" {
 				value, err := yaml.PathGetter{
 					Path: []string{"spec", "containers", "[name=test]", "envFrom", "0", "configMapRef", "name"},
-				}.Filter(&r.rnode)
+				}.Filter(r.rnode())
 				assert.NoError(t, err)
 				assert.Equal(t, name, value.Document().Value)
-			} else if r.rnode.GetKind() == "ConfigMap" {
-				assert.Equal(t, name, r.rnode.GetName())
+			} else if r.rnode().GetKind() == "ConfigMap" {
+				assert.Equal(t, name, r.rnode().GetName())
 				value, _ := yaml.PathGetter{
 					Path: []string{"data", "foo1"},
-				}.Filter(&r.rnode)
+				}.Filter(r.rnode())
 				if value == nil {
 					value = yaml.NewScalarRNode("")
 				}

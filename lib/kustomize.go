@@ -36,6 +36,12 @@ func BuildKustomization(k types.Kustomization, builder func(fs filesys.FileSyste
 	})
 }
 
+func NoFilesystem() func(filesys.FileSystem) error {
+	return func(fs filesys.FileSystem) error {
+		return nil
+	}
+}
+
 func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error) (result ResourceList) {
 	if !filepath.IsLocal(path) {
 		FailOnError(fmt.Errorf("path must be local"))
