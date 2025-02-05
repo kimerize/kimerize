@@ -1,13 +1,10 @@
 package lib
 
 import (
-	"encoding/json"
-	"errors"
 	"reflect"
 	"regexp"
 
 	"k8s.io/apimachinery/pkg/types"
-	k8sjson "sigs.k8s.io/json"
 	"sigs.k8s.io/kustomize/api/hasher"
 	"sigs.k8s.io/kustomize/kyaml/openapi"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
@@ -15,52 +12,6 @@ import (
 )
 
 var h = &hasher.Hasher{}
-
-// func ModifyHashSuffixedResource(rm resmap.ResMap, name string, fn func(*yaml.RNode)) {
-// 	for _, r := range rm.Resources() {
-// 		copy := r.Copy()
-// 		re := regexp.MustCompile(`(^.+)-([a-z0-9]+)$`)
-// 		if match := re.FindStringSubmatch(copy.GetName()); match != nil {
-// 			if name != match[1] {
-// 				continue
-// 			}
-// 			copy.SetName(name)
-// 			wantedHash := match[2]
-// 			if gotHash, _ := h.Hash(copy); wantedHash == gotHash {
-// 				fn(&r.RNode)
-// 				newHash, _ := h.Hash(&r.RNode)
-// 				r.SetName(name + "-" + newHash)
-// 			}
-// 			return
-// 		}
-// 	}
-// }
-
-func ModifyAs[T any](r *Resource, fn func(*T)) {
-	var t T
-
-	b, err := json.Marshal(r.object)
-	if err != nil {
-		// TODO:
-	}
-	strictErrs, err := k8sjson.UnmarshalStrict(b, &t, k8sjson.DisallowUnknownFields, k8sjson.DisallowDuplicateFields)
-	if err := errors.Join(append(strictErrs, err)...); err != nil {
-		// TODO:
-	}
-
-	fn(&t)
-
-	b, err = json.Marshal(t)
-	if err != nil {
-		// TODO:
-	}
-	newObject := make(map[string]any)
-	err = json.Unmarshal(b, &newObject)
-	if err != nil {
-		// TODO:
-	}
-	r.object = newObject
-}
 
 type valueSetterWalker struct {
 	value    string

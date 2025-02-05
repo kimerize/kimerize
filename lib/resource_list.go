@@ -2,16 +2,28 @@ package lib
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
+	k8sjson "sigs.k8s.io/json"
 	"sigs.k8s.io/kustomize/kyaml/resid"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 type Resource struct {
-	// rnode yaml.RNode
 	object map[string]any
 }
+
+// String implements fmt.Stringer.
+func (r Resource) String() string {
+	rnode := r.rnode()
+	return fmt.Sprintf(
+		"%s/%s %s/%s",
+		rnode.GetApiVersion(), rnode.GetKind(), rnode.GetNamespace(), rnode.GetName(),
+	)
+}
+
+var _ fmt.Stringer = Resource{}
 
 func (r *Resource) rnode() *yaml.RNode {
 	rnode, err := yaml.FromMap(r.object)
@@ -50,16 +62,31 @@ func ResourceFrom[T any](o T) Resource {
 	return resource
 }
 
-// String implements fmt.Stringer.
-func (r Resource) String() string {
-	rnode := r.rnode()
-	return fmt.Sprintf(
-		"%s/%s %s/%s",
-		rnode.GetApiVersion(), rnode.GetKind(), rnode.GetNamespace(), rnode.GetName(),
-	)
-}
+func ModifyAs[T any](r *Resource, fn func(*T)) {
+	var t T
 
-var _ fmt.Stringer = Resource{}
+	b, err := json.Marshal(r.object)
+	if err != nil {
+		// TODO:
+	}
+	strictErrs, err := k8sjson.UnmarshalStrict(b, &t, k8sjson.DisallowUnknownFields, k8sjson.DisallowDuplicateFields)
+	if err := errors.Join(append(strictErrs, err)...); err != nil {
+		// TODO:
+	}
+
+	fn(&t)
+
+	b, err = json.Marshal(t)
+	if err != nil {
+		// TODO:
+	}
+	newObject := make(map[string]any)
+	err = json.Unmarshal(b, &newObject)
+	if err != nil {
+		// TODO:
+	}
+	r.object = newObject
+}
 
 func (r *Resource) SetLabel(key, value string) {
 	ModifyAs(r, func(r *yaml.RNode) {
