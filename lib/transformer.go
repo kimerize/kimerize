@@ -73,6 +73,78 @@ func Aggregate(resources ...ResourceList) ResourceList {
 
 type Transformer func(*ResourceList)
 
+func KindTransformer[T any](f func(*T)) Transformer {
+	return func(rl *ResourceList) {
+		kind := reflect.TypeOf((*T)(nil)).Elem().Name()
+		rl.ForEach(func(r *Resource) {
+			if r.rnode().GetKind() == kind {
+				ModifyAs(r, f)
+			}
+		})
+	}
+}
+
+type Matcher func(*Resource) bool
+
+func FilteredTransformer(f Matcher, t Transformer) Transformer {
+	return func(rl *ResourceList) {
+		rl.ForEach(func(r *Resource) {
+			if f(r) {
+				r.ApplyTransformer(t)
+			}
+		})
+	}
+}
+
+func NamespaceMatcher(ns string) Matcher {
+	return func(r *Resource) bool {
+		return r.Namespace() == ns
+	}
+}
+
+func NameMatcher(name string) Matcher {
+	return func(r *Resource) bool {
+		return r.Name() == name
+	}
+}
+
+func AndMatcher(matchers ...Matcher) Matcher {
+	return func(r *Resource) bool {
+		for _, m := range matchers {
+			if !m(r) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+func OrMatcher(matchers ...Matcher) Matcher {
+	return func(r *Resource) bool {
+		for _, m := range matchers {
+			if m(r) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func NotMatcher(matcher Matcher) Matcher {
+	return func(r *Resource) bool {
+		return !matcher(r)
+	}
+}
+
+func LabelMatcher(key, value string) Matcher {
+	return func(r *Resource) bool {
+		rnode := r.rnode()
+		labels := rnode.GetLabels()
+		lv, ok := labels[key]
+		return ok && lv == value
+	}
+}
+
 func Transform(resources ResourceList, transformers ...Transformer) ResourceList {
 	for _, t := range transformers {
 		t(&resources)

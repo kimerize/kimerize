@@ -35,6 +35,13 @@ func GetMainPkg() packages.Package {
 }
 
 func FailOnError(err error) {
+	defer func() {
+		// Getting main package might fail
+		if r := recover(); r != nil {
+			tracerr.Print(tracerr.Wrap(err))
+			os.Exit(1)
+		}
+	}()
 	if err != nil {
 		printStackTrace(GetMainPkg(), tracerr.Wrap(err))
 		os.Exit(1)

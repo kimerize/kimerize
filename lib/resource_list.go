@@ -14,6 +14,36 @@ type Resource struct {
 	object map[string]any
 }
 
+func (r *Resource) Kind() string {
+	return r.rnode().GetKind()
+}
+
+func (r *Resource) Name() string {
+	return r.rnode().GetName()
+}
+
+func (r *Resource) Namespace() string {
+	return r.rnode().GetNamespace()
+}
+
+func (r *Resource) ApplyTransformer(t Transformer) {
+	rl := NewResourceList()
+	rl.resources = append(rl.resources, r)
+	rl.ApplyTransformer(t)
+}
+
+func (r *Resource) SetLabel(key, value string) {
+	ModifyAs(r, func(r *yaml.RNode) {
+		_, err := yaml.LabelSetter{
+			Key:   key,
+			Value: value,
+		}.Filter(r)
+		if err != nil {
+			panic(err)
+		}
+	})
+}
+
 // String implements fmt.Stringer.
 func (r Resource) String() string {
 	rnode := r.rnode()
@@ -31,6 +61,16 @@ func (r *Resource) rnode() *yaml.RNode {
 		// TODO: handle error
 	}
 	return rnode
+}
+
+func (r *Resource) Copy() *Resource {
+	object, err := r.rnode().Map()
+	if err != nil {
+		panic(err)
+	}
+	return &Resource{
+		object: object,
+	}
 }
 
 func ResourceFrom[T any](o T) Resource {
@@ -63,45 +103,53 @@ func ResourceFrom[T any](o T) Resource {
 }
 
 func ModifyAs[T any](r *Resource, fn func(*T)) {
-	var t T
-
-	b, err := json.Marshal(r.object)
-	if err != nil {
-		// TODO:
-	}
-	strictErrs, err := k8sjson.UnmarshalStrict(b, &t, k8sjson.DisallowUnknownFields, k8sjson.DisallowDuplicateFields)
-	if err := errors.Join(append(strictErrs, err)...); err != nil {
-		// TODO:
-	}
-
-	fn(&t)
-
-	b, err = json.Marshal(t)
-	if err != nil {
-		// TODO:
-	}
-	newObject := make(map[string]any)
-	err = json.Unmarshal(b, &newObject)
-	if err != nil {
-		// TODO:
-	}
-	r.object = newObject
-}
-
-func (r *Resource) SetLabel(key, value string) {
-	ModifyAs(r, func(r *yaml.RNode) {
-		_, err := yaml.LabelSetter{
-			Key:   key,
-			Value: value,
-		}.Filter(r)
+	switch any(*new(T)).(type) {
+	case yaml.RNode:
+		rnode, err := yaml.FromMap(r.object)
 		if err != nil {
 			panic(err)
 		}
-	})
+
+		fn(any(rnode).(*T))
+
+		object, err := rnode.Map()
+		if err != nil {
+			panic(err)
+		}
+		r.object = object
+	default:
+		var t T
+
+		b, err := json.Marshal(r.object)
+		if err != nil {
+			panic(err)
+		}
+		strictErrs, err := k8sjson.UnmarshalStrict(b, &t, k8sjson.DisallowUnknownFields, k8sjson.DisallowDuplicateFields)
+		if err := errors.Join(append(strictErrs, err)...); err != nil {
+			FailOnError(err)
+		}
+
+		fn(&t)
+
+		b, err = json.Marshal(t)
+		if err != nil {
+			panic(err)
+		}
+		newObject := make(map[string]any)
+		err = json.Unmarshal(b, &newObject)
+		if err != nil {
+			panic(err)
+		}
+		r.object = newObject
+	}
 }
 
 type ResourceList struct {
 	resources []*Resource
+}
+
+func (rl *ResourceList) ApplyTransformer(t Transformer) {
+	t(rl)
 }
 
 func (rl *ResourceList) ForEach(f func(*Resource)) {
