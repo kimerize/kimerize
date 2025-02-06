@@ -14,6 +14,12 @@ type Resource struct {
 	object map[string]any
 }
 
+func FromMap(m map[string]any) Resource {
+	return Resource{
+		object: m,
+	}
+}
+
 func (r *Resource) Kind() string {
 	return r.rnode().GetKind()
 }
