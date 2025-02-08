@@ -112,6 +112,7 @@ require (
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
 	sigs.k8s.io/kustomize/api v0.19.0
 	sigs.k8s.io/kustomize/kustomize/v5 v5.6.0
+	sigs.k8s.io/kustomize/plugin/builtin/helmchartinflationgenerator v0.0.0-20250203024057-3be1af679874
 	sigs.k8s.io/structured-merge-diff/v4 v4.5.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )

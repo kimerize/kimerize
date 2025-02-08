@@ -2,10 +2,15 @@ package lib
 
 import (
 	"context"
+	"fmt"
+	"path/filepath"
 	"reflect"
 
 	"github.com/go-logr/logr"
 	"github.com/google/k8s-digester/pkg/resolve"
+	"sigs.k8s.io/kustomize/api/konfig"
+	"sigs.k8s.io/kustomize/api/types"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
@@ -79,6 +84,79 @@ func KindTransformer[T any](f func(*T)) Transformer {
 		rl.ForEach(func(r *Resource) {
 			if r.rnode().GetKind() == kind {
 				ModifyAs(r, f)
+			}
+		})
+	}
+}
+
+// TODO: Optionally add files
+func KustomizeComponentTransformer(k types.Kustomization) Transformer {
+	k.Kind = "Component"
+	const idAnnotation = "internal.kimerize.io/id"
+	return func(rl *ResourceList) {
+		files := map[string]string{}
+		componentDir := "component"
+		pk := types.Kustomization{
+			Components: []string{
+				componentDir,
+			},
+		}
+		counter := 0
+		rl.ForEach(func(r *Resource) {
+			r.SetAnnotation(idAnnotation, fmt.Sprint(counter))
+			filename := fmt.Sprintf("resource-%d.yaml", counter)
+			files[filename] = r.rnode().MustString()
+			pk.Resources = append(pk.Resources, filename)
+			counter++
+		})
+		newRL := BuildKustomization(pk, func(fs filesys.FileSystem) error {
+			for name, content := range files {
+				if err := fs.WriteFile(name, []byte(content)); err != nil {
+					return err
+				}
+			}
+			fs.MkdirAll(componentDir)
+			kBytes, err := yaml.Marshal(k)
+			if err != nil {
+				return err
+			}
+			err = fs.WriteFile(filepath.Join(componentDir, konfig.RecognizedKustomizationFileNames()[0]), kBytes)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+
+		// Update resources with new resources
+		rl.ForEach(func(r *Resource) {
+			ra := r.Annotation(idAnnotation)
+			newRL.ForEach(func(nr *Resource) {
+				if nr.Annotation(idAnnotation) == ra {
+					r.object = nr.object
+				}
+			})
+		})
+
+		// Remove resources that are not in the new resource list
+		rl.RemoveAll(func(r *Resource) bool {
+			ra := r.Annotation(idAnnotation)
+			found := false
+			newRL.ForEach(func(nr *Resource) {
+				if nr.Annotation(idAnnotation) == ra {
+					found = true
+				}
+			})
+			return !found
+		})
+
+		rl.ForEach(func(r *Resource) {
+			r.ClearAnnotation(idAnnotation)
+		})
+
+		// Add new resources
+		newRL.ForEach(func(r *Resource) {
+			if r.Annotation(idAnnotation) == "" {
+				rl.Append(*r)
 			}
 		})
 	}

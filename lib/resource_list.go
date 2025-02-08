@@ -20,6 +20,10 @@ func FromMap(m map[string]any) Resource {
 	}
 }
 
+func (r *Resource) MustString() string {
+	return r.rnode().MustString()
+}
+
 func (r *Resource) Kind() string {
 	return r.rnode().GetKind()
 }
@@ -30,6 +34,10 @@ func (r *Resource) Name() string {
 
 func (r *Resource) Namespace() string {
 	return r.rnode().GetNamespace()
+}
+
+func (r *Resource) Annotation(key string) string {
+	return r.rnode().GetAnnotations()[key]
 }
 
 func (r *Resource) ApplyTransformer(t Transformer) {
@@ -45,6 +53,46 @@ func (r *Resource) SetLabel(key, value string) {
 			Value: value,
 		}.Filter(r)
 		if err != nil {
+			panic(err)
+		}
+	})
+}
+
+func (r *Resource) SetAnnotation(key, value string) {
+	ModifyAs(r, func(r *yaml.RNode) {
+		_, err := yaml.AnnotationSetter{
+			Key:   key,
+			Value: value,
+		}.Filter(r)
+		if err != nil {
+			panic(err)
+		}
+	})
+}
+
+func (r *Resource) ClearAnnotation(key string) {
+	ModifyAs(r, func(r *yaml.RNode) {
+		_, err := yaml.AnnotationClearer{
+			Key: key,
+		}.Filter(r)
+		yaml.ClearEmptyAnnotations(r)
+		if err != nil {
+			panic(err)
+		}
+	})
+}
+
+func (r *Resource) SetName(name string) {
+	ModifyAs(r, func(r *yaml.RNode) {
+		if err := r.SetName(name); err != nil {
+			panic(err)
+		}
+	})
+}
+
+func (r *Resource) SetNamespace(namespace string) {
+	ModifyAs(r, func(r *yaml.RNode) {
+		if err := r.SetNamespace(namespace); err != nil {
 			panic(err)
 		}
 	})
@@ -91,6 +139,8 @@ func ResourceFrom[T any](o T) Resource {
 		resource.object, err = o.Map()
 	case Resource:
 		return o
+	case map[string]any:
+		resource.object = o
 	default:
 		var b []byte
 		b, err = json.Marshal(o)
@@ -152,6 +202,16 @@ func ModifyAs[T any](r *Resource, fn func(*T)) {
 
 type ResourceList struct {
 	resources []*Resource
+}
+
+func (rl *ResourceList) RemoveAll(f func(r *Resource) bool) {
+	var newResources []*Resource
+	for _, r := range rl.resources {
+		if !f(r) {
+			newResources = append(newResources, r)
+		}
+	}
+	rl.resources = newResources
 }
 
 func (rl *ResourceList) ApplyTransformer(t Transformer) {
