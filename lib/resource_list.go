@@ -196,7 +196,34 @@ func ModifyAs[T any](r *Resource, fn func(*T)) {
 		if err != nil {
 			panic(err)
 		}
+		cleanNilAndEmpty(newObject)
+		delete(newObject, "status")
 		r.object = newObject
+	}
+}
+
+func cleanNilAndEmpty(obj map[string]any) {
+	for k, v := range obj {
+		if v == nil {
+			delete(obj, k)
+			continue
+		}
+
+		switch val := v.(type) {
+		case map[string]any:
+			cleanNilAndEmpty(val)
+		case []any:
+			// Handle arrays/slices
+			for i := range val {
+				if m, ok := val[i].(map[string]any); ok {
+					cleanNilAndEmpty(m)
+				}
+			}
+			// Remove if array is empty
+			if len(val) == 0 {
+				delete(obj, k)
+			}
+		}
 	}
 }
 
