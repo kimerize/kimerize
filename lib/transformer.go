@@ -85,11 +85,13 @@ type Transformer func(*ResourceList)
 
 func KindTransformer[T any](f func(*T)) Transformer {
 	return func(rl *ResourceList) {
-		FilteredTransformer(KindMatcher[T](), func(r *ResourceList) {
-			r.ForEach(func(r *Resource) {
-				ModifyAs(r, f)
-			})
-		})
+		rl.ApplyTransformer(
+			FilteredTransformer(KindMatcher[T](), func(rl *ResourceList) {
+				rl.ForEach(func(r *Resource) {
+					ModifyAs(r, f)
+				})
+			}),
+		)
 	}
 }
 
