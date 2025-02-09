@@ -84,11 +84,10 @@ type Transformer func(*ResourceList)
 
 func KindTransformer[T any](f func(*T)) Transformer {
 	return func(rl *ResourceList) {
-		kind := reflect.TypeOf((*T)(nil)).Elem().Name()
-		rl.ForEach(func(r *Resource) {
-			if r.rnode().GetKind() == kind {
+		FilteredTransformer(KindMatcher[T](), func(r *ResourceList) {
+			r.ForEach(func(r *Resource) {
 				ModifyAs(r, f)
-			}
+			})
 		})
 	}
 }
@@ -305,6 +304,13 @@ func LabelMatcher(key, value string) Matcher {
 		labels := rnode.GetLabels()
 		lv, ok := labels[key]
 		return ok && lv == value
+	}
+}
+
+func KindMatcher[T any]() Matcher {
+	kind := reflect.TypeOf((*T)(nil)).Elem().Name()
+	return func(r *Resource) bool {
+		return r.rnode().GetKind() == kind
 	}
 }
 
