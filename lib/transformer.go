@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 
+	"github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/search-replace/searchreplace"
 	"github.com/go-logr/logr"
 	"github.com/google/k8s-digester/pkg/resolve"
 	"sigs.k8s.io/kustomize/api/konfig"
@@ -158,6 +159,22 @@ func KustomizeComponentTransformer(k types.Kustomization) Transformer {
 			if r.Annotation(idAnnotation) == "" {
 				rl.Append(*r)
 			}
+		})
+	}
+}
+
+func RegexReplaceTransformer(pattern string, replacement string) Transformer {
+	return func(rl *ResourceList) {
+		filter := searchreplace.SearchReplace{
+			ByValueRegex: pattern,
+			PutValue:     replacement,
+		}
+
+		rl.ForEach(func(r *Resource) {
+			ModifyAs(r, func(rnode *yaml.RNode) {
+				_, err := filter.Filter([]*yaml.RNode{rnode})
+				FailOnError(err)
+			})
 		})
 	}
 }

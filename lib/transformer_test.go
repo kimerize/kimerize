@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/kustomize/api/types"
+	"sigs.k8s.io/yaml"
 )
 
 func TestKustomizeComponentTransformer(t *testing.T) {
@@ -96,4 +97,60 @@ metadata:
     app: nginx
   name: foo
 `), strings.TrimSpace(rl.resources[2].MustString()))
+}
+
+func TestSearchReplaceTransformer(t *testing.T) {
+	ingress := `
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp
+  namespace: myapp
+spec:
+  rules:
+  - host: myapp.__MY_DOMAIN__
+    http:
+      paths:
+      - backend:
+          service:
+            name: myapp
+            port:
+              name: http
+        path: /
+        pathType: ImplementationSpecific
+  tls:
+  - hosts:
+    - myapp.__MY_DOMAIN__
+    secretName: myapp-tls
+`
+	ingressMap := make(map[string]any)
+	err := yaml.Unmarshal([]byte(ingress), &ingressMap)
+	assert.NoError(t, err)
+	rl := NewResourceList()
+	rl.Append(ResourceFrom(ingressMap))
+
+	rl.ApplyTransformer(RegexReplaceTransformer("(.+)\\.__MY_DOMAIN__$", "${1}.example.com"))
+	assert.Equal(t, strings.TrimSpace(`
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp
+  namespace: myapp
+spec:
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: myapp
+            port:
+              name: http
+        path: /
+        pathType: ImplementationSpecific
+  tls:
+  - hosts:
+    - myapp.example.com
+    secretName: myapp-tls
+`), strings.TrimSpace(rl.resources[0].MustString()))
 }
