@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"regexp"
 
 	"github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/search-replace/searchreplace"
 	"github.com/go-logr/logr"
 	"github.com/google/k8s-digester/pkg/resolve"
+	k8stypes "k8s.io/apimachinery/pkg/types"
+	kustomize_hasher "sigs.k8s.io/kustomize/api/hasher"
 	"sigs.k8s.io/kustomize/api/konfig"
-	"sigs.k8s.io/kustomize/api/types"
+	kusttypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -91,13 +94,13 @@ func KindTransformer[T any](f func(*T)) Transformer {
 }
 
 // TODO: Optionally add files
-func KustomizeComponentTransformer(k types.Kustomization) Transformer {
+func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 	k.Kind = "Component"
 	const idAnnotation = "internal.kimerize.io/id"
 	return func(rl *ResourceList) {
 		files := map[string]string{}
 		componentDir := "component"
-		pk := types.Kustomization{
+		pk := kusttypes.Kustomization{
 			Components: []string{
 				componentDir,
 			},
@@ -176,6 +179,71 @@ func RegexReplaceTransformer(pattern string, replacement string) Transformer {
 				FailOnError(err)
 			})
 		})
+	}
+}
+
+func ValueReplaceTransformer(value string, replacement string) Transformer {
+	return func(rl *ResourceList) {
+		filter := searchreplace.SearchReplace{
+			ByValue:  value,
+			PutValue: replacement,
+		}
+
+		rl.ForEach(func(r *Resource) {
+			ModifyAs(r, func(rnode *yaml.RNode) {
+				_, err := filter.Filter([]*yaml.RNode{rnode})
+				FailOnError(err)
+			})
+		})
+	}
+}
+
+var hasher = &kustomize_hasher.Hasher{}
+
+func HashSuffixedResourceTransformer(name string, t Transformer) Transformer {
+	return func(rl *ResourceList) {
+		nameMappings := map[k8stypes.NamespacedName]string{}
+		re := regexp.MustCompile(`(^.+)-([a-z0-9]{10})$`)
+		rl.ForEach(func(r *Resource) {
+			rnode := r.rnode()
+			if match := re.FindStringSubmatch(rnode.GetName()); match != nil {
+				if name != match[1] {
+					return
+				}
+				rnode.SetName(name)
+				wantedHash := match[2]
+				gotHash, _ := hasher.Hash(rnode)
+				if wantedHash != gotHash {
+					return
+				}
+			} else {
+				return
+			}
+
+			r.ApplyTransformer(t)
+
+			rnode = r.rnode()
+			oldName := rnode.GetName()
+			var newName string
+
+			// Modify hash suffix
+			ModifyAs(r, func(r *yaml.RNode) {
+				newHash, err := hasher.Hash(r)
+				if err != nil {
+					panic(err)
+				}
+				r.SetName(name + "-" + newHash)
+				newName = r.GetName()
+			})
+
+			nameMappings[k8stypes.NamespacedName{Name: oldName, Namespace: rnode.GetNamespace()}] = newName
+		})
+		for key, newName := range nameMappings {
+			rl.ApplyTransformer(FilteredTransformer(
+				NamespaceMatcher(key.Namespace),
+				ValueReplaceTransformer(key.Name, newName),
+			))
+		}
 	}
 }
 
