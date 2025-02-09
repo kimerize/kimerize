@@ -56,7 +56,7 @@ func (h HelmRenderer) Transform(items *lib.ResourceList) {
 }
 
 func (h *HelmRenderer) OverrideValues(override map[string]any) {
-	mergo.Merge(&h.values, override)
+	mergo.Merge(&h.values, override, mergo.WithOverride)
 }
 
 // ReplaceValues replaces the values at the given path with the given value.
