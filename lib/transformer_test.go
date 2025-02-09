@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/yaml"
 )
@@ -152,5 +153,45 @@ spec:
   - hosts:
     - myapp.example.com
     secretName: myapp-tls
+`), strings.TrimSpace(rl.resources[0].MustString()))
+}
+
+func TestReplacePathsTransformer(t *testing.T) {
+	ingress := `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  - name: sidecar
+    image: sidecar
+`
+	ingressMap := make(map[string]any)
+	err := yaml.Unmarshal([]byte(ingress), &ingressMap)
+	assert.NoError(t, err)
+	rl := NewResourceList()
+	rl.Append(ResourceFrom(ingressMap))
+
+	rl.ApplyTransformer(ReplacePathsTransformer("spec.containers.[name=nginx].env", []corev1.EnvVar{{
+		Name:  "FOO",
+		Value: "bar",
+	}}))
+	assert.Equal(t, strings.TrimSpace(`
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - env:
+    - name: FOO
+      value: bar
+    image: nginx
+    name: nginx
+  - image: sidecar
+    name: sidecar
 `), strings.TrimSpace(rl.resources[0].MustString()))
 }

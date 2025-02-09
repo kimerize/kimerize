@@ -196,10 +196,10 @@ func ModifyAs[T any](r *Resource, fn func(*T)) {
 		if err != nil {
 			panic(err)
 		}
-		cleanNilAndEmpty(newObject)
-		delete(newObject, "status")
 		r.object = newObject
 	}
+	cleanNilAndEmpty(r.object)
+	delete(r.object, "status")
 }
 
 func cleanNilAndEmpty(obj map[string]any) {
