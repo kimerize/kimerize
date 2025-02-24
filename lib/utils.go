@@ -57,12 +57,3 @@ func printStackTrace(p packages.Package, err tracerr.Error) {
 	}
 	tracerr.PrintSourceColor(tracerr.CustomError(err, frames))
 }
-
-func localPathOutput() string {
-	p := GetMainPkg()
-	pkgRelPath, err := filepath.Rel(p.Module.Dir, p.Dir)
-	if err != nil {
-		panic(err)
-	}
-	return filepath.Join(p.Module.Dir, "zz_generated", pkgRelPath)
-}

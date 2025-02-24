@@ -6,7 +6,7 @@ import (
 	"dario.cat/mergo"
 	"github.com/kimerize/kimerize/lib"
 	"sigs.k8s.io/kustomize/api/types"
-	"sigs.k8s.io/kustomize/kyaml/utils"
+	kyaml_utils "sigs.k8s.io/kustomize/kyaml/utils"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
@@ -78,7 +78,7 @@ func (h *HelmRenderer) ReplaceValues(path string, v any) {
 		panic(err)
 	}
 
-	targetFieldList, err := rnode.Pipe(&yaml.PathMatcher{Path: utils.SmarterPathSplitter(path, "."), Create: value.YNode().Kind})
+	targetFieldList, err := rnode.Pipe(&yaml.PathMatcher{Path: kyaml_utils.SmarterPathSplitter(path, "."), Create: value.YNode().Kind})
 	if err != nil {
 		lib.FailOnError(fmt.Errorf("failed to find finds: %w", err))
 	}

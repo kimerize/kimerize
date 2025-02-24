@@ -88,7 +88,7 @@ func KindTransformer[T any](f func(*T)) Transformer {
 		rl.ApplyTransformer(
 			FilteredTransformer(KindMatcher[T](), func(rl *ResourceList) {
 				rl.ForEach(func(r *Resource) {
-					ModifyAs(r, f)
+					ModifyResourceAs(r, f)
 				})
 			}),
 		)
@@ -138,7 +138,7 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 			ra := r.Annotation(idAnnotation)
 			newRL.ForEach(func(nr *Resource) {
 				if nr.Annotation(idAnnotation) == ra {
-					r.object = nr.object
+					r.doc = nr.doc
 				}
 			})
 		})
@@ -176,7 +176,7 @@ func RegexReplaceTransformer(pattern string, replacement string) Transformer {
 		}
 
 		rl.ForEach(func(r *Resource) {
-			ModifyAs(r, func(rnode *yaml.RNode) {
+			ModifyResourceAs(r, func(rnode *yaml.RNode) {
 				_, err := filter.Filter([]*yaml.RNode{rnode})
 				FailOnError(err)
 			})
@@ -192,7 +192,7 @@ func ValueReplaceTransformer(value string, replacement string) Transformer {
 		}
 
 		rl.ForEach(func(r *Resource) {
-			ModifyAs(r, func(rnode *yaml.RNode) {
+			ModifyResourceAs(r, func(rnode *yaml.RNode) {
 				_, err := filter.Filter([]*yaml.RNode{rnode})
 				FailOnError(err)
 			})
@@ -229,7 +229,7 @@ func HashSuffixedResourceTransformer(name string, t Transformer) Transformer {
 			var newName string
 
 			// Modify hash suffix
-			ModifyAs(r, func(r *yaml.RNode) {
+			ModifyResourceAs(r, func(r *yaml.RNode) {
 				newHash, err := hasher.Hash(r)
 				if err != nil {
 					panic(err)
@@ -252,7 +252,7 @@ func HashSuffixedResourceTransformer(name string, t Transformer) Transformer {
 func ReplacePathsTransformer(path string, v any) Transformer {
 	return func(rl *ResourceList) {
 		rl.ForEach(func(r *Resource) {
-			ModifyAs(r, func(rnode *yaml.RNode) {
+			ModifyResourceAs(r, func(rnode *yaml.RNode) {
 				bytes, err := yaml.Marshal(v)
 				if err != nil {
 					FailOnError(fmt.Errorf("value cannot be serialized as yaml: %w", err))
@@ -439,7 +439,7 @@ func generate(o Overlay) ResourceList {
 
 func DigestImages(rl *ResourceList) {
 	rl.ForEach(func(r *Resource) {
-		ModifyAs(r, func(r *yaml.RNode) {
+		ModifyResourceAs(r, func(r *yaml.RNode) {
 			resolve.ImageTags(context.TODO(), logr.Discard(), nil, r, nil)
 		})
 	})

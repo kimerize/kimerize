@@ -41,12 +41,8 @@ var _ PackagePublisher = kustomizePublisher{}
 func (k kustomizePublisher) Publish(resources ResourceList) error {
 	rm := resmap.New()
 	resources.ForEach(func(r *Resource) {
-		rnode, err := yaml.FromMap(r.object)
-		if err != nil {
-			panic(err)
-		}
 		rm.Append(&resource.Resource{
-			RNode: *rnode,
+			RNode: NewFromResource[yaml.RNode](*r),
 		})
 	})
 	outputDir := localPathOutput()
@@ -86,11 +82,7 @@ func (l localPackagePublisher) Publish(resources ResourceList) error {
 	}
 	nodes := []*yaml.RNode{}
 	resources.ForEach(func(r *Resource) {
-		rnode, err := yaml.FromMap(r.object)
-		if err != nil {
-			panic(err)
-		}
-		nodes = append(nodes, rnode)
+		nodes = append(nodes, NewFromResource[*yaml.RNode](*r))
 	})
 	return writer.Write(nodes)
 }
@@ -100,3 +92,12 @@ func LocalPackageWriter() localPackagePublisher {
 }
 
 var _ PackagePublisher = localPackagePublisher{}
+
+func localPathOutput() string {
+	p := GetMainPkg()
+	pkgRelPath, err := filepath.Rel(p.Module.Dir, p.Dir)
+	if err != nil {
+		panic(err)
+	}
+	return filepath.Join(p.Module.Dir, "zz_generated", pkgRelPath)
+}

@@ -12,7 +12,7 @@ import (
 
 func TestKustomizeComponentTransformer(t *testing.T) {
 	rl := NewResourceList()
-	rl.Append(ResourceFrom(map[string]any{
+	rl.Append(NewResourceFrom(map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
 		"metadata": map[string]any{
@@ -30,7 +30,7 @@ func TestKustomizeComponentTransformer(t *testing.T) {
 			},
 		},
 	}))
-	rl.Append(ResourceFrom(map[string]any{
+	rl.Append(NewResourceFrom(map[string]any{
 		"apiVersion": "v1",
 		"kind":       "ConfigMap",
 		"metadata": map[string]any{
@@ -128,7 +128,7 @@ spec:
 	err := yaml.Unmarshal([]byte(ingress), &ingressMap)
 	assert.NoError(t, err)
 	rl := NewResourceList()
-	rl.Append(ResourceFrom(ingressMap))
+	rl.Append(NewResourceFrom(ingressMap))
 
 	rl.ApplyTransformer(RegexReplaceTransformer("(.+)\\.__MY_DOMAIN__$", "${1}.example.com"))
 	assert.Equal(t, strings.TrimSpace(`
@@ -173,7 +173,7 @@ spec:
 	err := yaml.Unmarshal([]byte(ingress), &ingressMap)
 	assert.NoError(t, err)
 	rl := NewResourceList()
-	rl.Append(ResourceFrom(ingressMap))
+	rl.Append(NewResourceFrom(ingressMap))
 
 	rl.ApplyTransformer(ReplacePathsTransformer("spec.containers.[name=nginx].env", []corev1.EnvVar{{
 		Name:  "FOO",

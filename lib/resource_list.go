@@ -1,23 +1,33 @@
 package lib
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 
-	k8sjson "sigs.k8s.io/json"
 	"sigs.k8s.io/kustomize/kyaml/resid"
-	"sigs.k8s.io/kustomize/kyaml/yaml"
+	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 type Resource struct {
-	object map[string]any
+	doc *Document
 }
 
-func FromMap(m map[string]any) Resource {
+func NewResource(o interface{}) Resource {
+	d := NewDocumentFrom(o)
 	return Resource{
-		object: m,
+		doc: &d,
 	}
+}
+
+func ModifyResourceAs[T any](r *Resource, f func(*T)) {
+	ModifyDocumentAs(r.doc, f)
+}
+
+func NewResourceFrom[T any](o T) Resource {
+	return NewResource(NewDocumentFrom(o))
+}
+
+func NewFromResource[T any](r Resource) T {
+	return NewFromDocument[T](*r.doc)
 }
 
 func (r *Resource) MustString() string {
@@ -47,8 +57,8 @@ func (r *Resource) ApplyTransformer(t Transformer) {
 }
 
 func (r *Resource) SetLabel(key, value string) {
-	ModifyAs(r, func(r *yaml.RNode) {
-		_, err := yaml.LabelSetter{
+	ModifyResourceAs(r, func(r *kyaml.RNode) {
+		_, err := kyaml.LabelSetter{
 			Key:   key,
 			Value: value,
 		}.Filter(r)
@@ -59,8 +69,8 @@ func (r *Resource) SetLabel(key, value string) {
 }
 
 func (r *Resource) SetAnnotation(key, value string) {
-	ModifyAs(r, func(r *yaml.RNode) {
-		_, err := yaml.AnnotationSetter{
+	ModifyResourceAs(r, func(r *kyaml.RNode) {
+		_, err := kyaml.AnnotationSetter{
 			Key:   key,
 			Value: value,
 		}.Filter(r)
@@ -71,11 +81,11 @@ func (r *Resource) SetAnnotation(key, value string) {
 }
 
 func (r *Resource) ClearAnnotation(key string) {
-	ModifyAs(r, func(r *yaml.RNode) {
-		_, err := yaml.AnnotationClearer{
+	ModifyResourceAs(r, func(r *kyaml.RNode) {
+		_, err := kyaml.AnnotationClearer{
 			Key: key,
 		}.Filter(r)
-		yaml.ClearEmptyAnnotations(r)
+		kyaml.ClearEmptyAnnotations(r)
 		if err != nil {
 			panic(err)
 		}
@@ -83,7 +93,7 @@ func (r *Resource) ClearAnnotation(key string) {
 }
 
 func (r *Resource) SetName(name string) {
-	ModifyAs(r, func(r *yaml.RNode) {
+	ModifyResourceAs(r, func(r *kyaml.RNode) {
 		if err := r.SetName(name); err != nil {
 			panic(err)
 		}
@@ -91,7 +101,7 @@ func (r *Resource) SetName(name string) {
 }
 
 func (r *Resource) SetNamespace(namespace string) {
-	ModifyAs(r, func(r *yaml.RNode) {
+	ModifyResourceAs(r, func(r *kyaml.RNode) {
 		if err := r.SetNamespace(namespace); err != nil {
 			panic(err)
 		}
@@ -109,121 +119,15 @@ func (r Resource) String() string {
 
 var _ fmt.Stringer = Resource{}
 
-func (r *Resource) rnode() *yaml.RNode {
-	rnode, err := yaml.FromMap(r.object)
-	if err != nil {
-		// TODO: handle error
-	}
-	return rnode
+func (r *Resource) rnode() *kyaml.RNode {
+	return NewFromDocument[*kyaml.RNode](*r.doc)
 }
 
 func (r *Resource) Copy() *Resource {
-	object, err := r.rnode().Map()
-	if err != nil {
-		panic(err)
-	}
+	rnode := NewFromDocument[*kyaml.RNode](*r.doc)
+	doc := NewDocumentFrom(rnode.Copy())
 	return &Resource{
-		object: object,
-	}
-}
-
-func ResourceFrom[T any](o T) Resource {
-	resource := Resource{
-		object: make(map[string]any),
-	}
-	var err error
-	switch o := any(o).(type) {
-	case yaml.RNode:
-		resource.object, err = o.Map()
-	case *yaml.RNode:
-		resource.object, err = o.Map()
-	case Resource:
-		return o
-	case map[string]any:
-		resource.object = o
-	default:
-		var b []byte
-		b, err = json.Marshal(o)
-		if err != nil {
-			break
-		}
-		err = json.Unmarshal(b, &resource.object)
-		if err != nil {
-			break
-		}
-	}
-	if err != nil {
-		// TODO: handle error
-	}
-	return resource
-}
-
-func ModifyAs[T any](r *Resource, fn func(*T)) {
-	switch any(*new(T)).(type) {
-	case yaml.RNode:
-		rnode, err := yaml.FromMap(r.object)
-		if err != nil {
-			panic(err)
-		}
-
-		fn(any(rnode).(*T))
-
-		object, err := rnode.Map()
-		if err != nil {
-			panic(err)
-		}
-		r.object = object
-	default:
-		var t T
-
-		b, err := json.Marshal(r.object)
-		if err != nil {
-			panic(err)
-		}
-		strictErrs, err := k8sjson.UnmarshalStrict(b, &t, k8sjson.DisallowUnknownFields, k8sjson.DisallowDuplicateFields)
-		if err := errors.Join(append(strictErrs, err)...); err != nil {
-			FailOnError(err)
-		}
-
-		fn(&t)
-
-		b, err = json.Marshal(t)
-		if err != nil {
-			panic(err)
-		}
-		newObject := make(map[string]any)
-		err = json.Unmarshal(b, &newObject)
-		if err != nil {
-			panic(err)
-		}
-		r.object = newObject
-	}
-	cleanNilAndEmpty(r.object)
-	delete(r.object, "status")
-}
-
-func cleanNilAndEmpty(obj map[string]any) {
-	for k, v := range obj {
-		if v == nil {
-			delete(obj, k)
-			continue
-		}
-
-		switch val := v.(type) {
-		case map[string]any:
-			cleanNilAndEmpty(val)
-		case []any:
-			// Handle arrays/slices
-			for i := range val {
-				if m, ok := val[i].(map[string]any); ok {
-					cleanNilAndEmpty(m)
-				}
-			}
-			// Remove if array is empty
-			if len(val) == 0 {
-				delete(obj, k)
-			}
-		}
+		doc: &doc,
 	}
 }
 
