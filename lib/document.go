@@ -8,7 +8,6 @@ import (
 	"github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/search-replace/searchreplace"
 	k8sjson "sigs.k8s.io/json"
 	"sigs.k8s.io/kustomize/kyaml/utils"
-	"sigs.k8s.io/kustomize/kyaml/yaml"
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
@@ -22,8 +21,8 @@ func (d *Document) RegexReplaceValues(value, replacement string) {
 		PutValue:     replacement,
 	}
 
-	ModifyDocumentAs(d, func(rnode *yaml.RNode) {
-		_, err := filter.Filter([]*yaml.RNode{rnode})
+	ModifyDocumentAs(d, func(rnode *kyaml.RNode) {
+		_, err := filter.Filter([]*kyaml.RNode{rnode})
 		FailOnError(err)
 	})
 }
@@ -34,25 +33,25 @@ func (d *Document) ReplaceValues(value, replacement string) {
 		PutValue: replacement,
 	}
 
-	ModifyDocumentAs(d, func(rnode *yaml.RNode) {
-		_, err := filter.Filter([]*yaml.RNode{rnode})
+	ModifyDocumentAs(d, func(rnode *kyaml.RNode) {
+		_, err := filter.Filter([]*kyaml.RNode{rnode})
 		FailOnError(err)
 	})
 }
 
 func (d *Document) ReplacePaths(path string, v any) {
-	ModifyDocumentAs(d, func(rnode *yaml.RNode) {
-		bytes, err := yaml.Marshal(v)
+	ModifyDocumentAs(d, func(rnode *kyaml.RNode) {
+		bytes, err := kyaml.Marshal(v)
 		if err != nil {
 			FailOnError(fmt.Errorf("value cannot be serialized as yaml: %w", err))
 		}
 
-		value, err := yaml.Parse(string(bytes))
+		value, err := kyaml.Parse(string(bytes))
 		if err != nil {
 			panic(err)
 		}
 
-		targetFieldList, err := rnode.Pipe(&yaml.PathMatcher{Path: utils.SmarterPathSplitter(path, "."), Create: value.YNode().Kind})
+		targetFieldList, err := rnode.Pipe(&kyaml.PathMatcher{Path: utils.SmarterPathSplitter(path, "."), Create: value.YNode().Kind})
 		if err != nil {
 			FailOnError(fmt.Errorf("failed to find finds: %w", err))
 		}
@@ -66,7 +65,7 @@ func (d *Document) ReplacePaths(path string, v any) {
 		}
 
 		for _, targetField := range targetFields {
-			if targetField.YNode().Kind == yaml.ScalarNode {
+			if targetField.YNode().Kind == kyaml.ScalarNode {
 				// For scalar, only copy the value (leave any type intact to auto-convert int->string or string->int)
 				targetField.YNode().Value = value.YNode().Value
 			} else {
@@ -76,7 +75,7 @@ func (d *Document) ReplacePaths(path string, v any) {
 	})
 }
 
-func NewDocumentFrom[T any](o T) Document {
+func NewDocument[T any](o T) Document {
 	document := Document{
 		object: make(map[string]any),
 	}
@@ -146,7 +145,7 @@ func NewFromDocument[T any](d Document) T {
 func ModifyDocumentAs[T any](d *Document, fn func(*T)) {
 	t := NewFromDocument[T](*d)
 	fn(&t)
-	d.object = NewDocumentFrom(t).object
+	d.object = NewDocument(t).object
 	cleanNilAndEmpty(d.object)
 	// if kubernetes object, remove status field
 	if _, ok := d.object["kind"]; ok {

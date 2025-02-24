@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/kustomize/api/types"
+	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 func TestKustomizeComponentTransformer(t *testing.T) {
@@ -75,7 +76,7 @@ spec:
       containers:
       - image: nginx:1.7.9
         name: nginx
-`), strings.TrimSpace(rl.resources[0].MustString()))
+`), strings.TrimSpace(NewFromDocument[*yaml.RNode](*rl.resources[0].Document).MustString()))
 	assert.Equal(t, strings.TrimSpace(`
 apiVersion: v1
 data:
@@ -85,7 +86,7 @@ metadata:
   labels:
     app: nginx
   name: nginx
-`), strings.TrimSpace(rl.resources[1].MustString()))
+`), strings.TrimSpace(NewFromDocument[*yaml.RNode](*rl.resources[1].Document).MustString()))
 	assert.Equal(t, strings.TrimSpace(`
 apiVersion: v1
 data:
@@ -95,5 +96,5 @@ metadata:
   labels:
     app: nginx
   name: foo
-`), strings.TrimSpace(rl.resources[2].MustString()))
+`), strings.TrimSpace(NewFromDocument[*yaml.RNode](*rl.resources[2].Document).MustString()))
 }

@@ -26,7 +26,7 @@ spec:
 	ingressMap := make(map[string]any)
 	err := yaml.Unmarshal([]byte(ingress), &ingressMap)
 	assert.NoError(t, err)
-	doc := NewDocumentFrom(ingressMap)
+	doc := NewDocument(ingressMap)
 
 	doc.ReplacePaths("spec.containers.[name=nginx].env", []corev1.EnvVar{{
 		Name:  "FOO",
@@ -76,7 +76,7 @@ spec:
 	ingressMap := make(map[string]any)
 	err := yaml.Unmarshal([]byte(ingress), &ingressMap)
 	assert.NoError(t, err)
-	doc := NewDocumentFrom(ingressMap)
+	doc := NewDocument(ingressMap)
 
 	doc.RegexReplaceValues("(.+)\\.__MY_DOMAIN__$", "${1}.example.com")
 	assert.Equal(t, strings.TrimSpace(`

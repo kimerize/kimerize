@@ -12,14 +12,10 @@ type Resource struct {
 }
 
 func NewResource(o interface{}) Resource {
-	d := NewDocumentFrom(o)
+	d := NewDocument(o)
 	return Resource{
 		Document: &d,
 	}
-}
-
-func (r *Resource) MustString() string {
-	return r.rnode().MustString()
 }
 
 func (r *Resource) Kind() string {
@@ -113,7 +109,7 @@ func (r *Resource) rnode() *kyaml.RNode {
 
 func (r *Resource) Copy() *Resource {
 	rnode := NewFromDocument[*kyaml.RNode](*r.Document)
-	doc := NewDocumentFrom(rnode.Copy())
+	doc := NewDocument(rnode.Copy())
 	return &Resource{
 		Document: &doc,
 	}
