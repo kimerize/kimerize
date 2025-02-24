@@ -8,26 +8,14 @@ import (
 )
 
 type Resource struct {
-	doc *Document
+	*Document
 }
 
 func NewResource(o interface{}) Resource {
 	d := NewDocumentFrom(o)
 	return Resource{
-		doc: &d,
+		Document: &d,
 	}
-}
-
-func ModifyResourceAs[T any](r *Resource, f func(*T)) {
-	ModifyDocumentAs(r.doc, f)
-}
-
-func NewResourceFrom[T any](o T) Resource {
-	return NewResource(NewDocumentFrom(o))
-}
-
-func NewFromResource[T any](r Resource) T {
-	return NewFromDocument[T](*r.doc)
 }
 
 func (r *Resource) MustString() string {
@@ -57,7 +45,7 @@ func (r *Resource) ApplyTransformer(t Transformer) {
 }
 
 func (r *Resource) SetLabel(key, value string) {
-	ModifyResourceAs(r, func(r *kyaml.RNode) {
+	ModifyDocumentAs(r.Document, func(r *kyaml.RNode) {
 		_, err := kyaml.LabelSetter{
 			Key:   key,
 			Value: value,
@@ -69,7 +57,7 @@ func (r *Resource) SetLabel(key, value string) {
 }
 
 func (r *Resource) SetAnnotation(key, value string) {
-	ModifyResourceAs(r, func(r *kyaml.RNode) {
+	ModifyDocumentAs(r.Document, func(r *kyaml.RNode) {
 		_, err := kyaml.AnnotationSetter{
 			Key:   key,
 			Value: value,
@@ -81,7 +69,7 @@ func (r *Resource) SetAnnotation(key, value string) {
 }
 
 func (r *Resource) ClearAnnotation(key string) {
-	ModifyResourceAs(r, func(r *kyaml.RNode) {
+	ModifyDocumentAs(r.Document, func(r *kyaml.RNode) {
 		_, err := kyaml.AnnotationClearer{
 			Key: key,
 		}.Filter(r)
@@ -93,7 +81,7 @@ func (r *Resource) ClearAnnotation(key string) {
 }
 
 func (r *Resource) SetName(name string) {
-	ModifyResourceAs(r, func(r *kyaml.RNode) {
+	ModifyDocumentAs(r.Document, func(r *kyaml.RNode) {
 		if err := r.SetName(name); err != nil {
 			panic(err)
 		}
@@ -101,7 +89,7 @@ func (r *Resource) SetName(name string) {
 }
 
 func (r *Resource) SetNamespace(namespace string) {
-	ModifyResourceAs(r, func(r *kyaml.RNode) {
+	ModifyDocumentAs(r.Document, func(r *kyaml.RNode) {
 		if err := r.SetNamespace(namespace); err != nil {
 			panic(err)
 		}
@@ -120,14 +108,14 @@ func (r Resource) String() string {
 var _ fmt.Stringer = Resource{}
 
 func (r *Resource) rnode() *kyaml.RNode {
-	return NewFromDocument[*kyaml.RNode](*r.doc)
+	return NewFromDocument[*kyaml.RNode](*r.Document)
 }
 
 func (r *Resource) Copy() *Resource {
-	rnode := NewFromDocument[*kyaml.RNode](*r.doc)
+	rnode := NewFromDocument[*kyaml.RNode](*r.Document)
 	doc := NewDocumentFrom(rnode.Copy())
 	return &Resource{
-		doc: &doc,
+		Document: &doc,
 	}
 }
 

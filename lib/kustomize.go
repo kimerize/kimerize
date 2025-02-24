@@ -87,7 +87,7 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 		FailOnError(err)
 	}
 	for _, r := range rm.Resources() {
-		result.Append(NewResourceFrom(r.RNode))
+		result.Append(NewResource(r.RNode))
 	}
 	return
 }

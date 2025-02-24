@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"regexp"
 
-	"github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/search-replace/searchreplace"
 	"github.com/go-logr/logr"
 	"github.com/google/k8s-digester/pkg/resolve"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -15,7 +14,6 @@ import (
 	"sigs.k8s.io/kustomize/api/konfig"
 	kusttypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
-	"sigs.k8s.io/kustomize/kyaml/utils"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
@@ -88,7 +86,7 @@ func KindTransformer[T any](f func(*T)) Transformer {
 		rl.ApplyTransformer(
 			FilteredTransformer(KindMatcher[T](), func(rl *ResourceList) {
 				rl.ForEach(func(r *Resource) {
-					ModifyResourceAs(r, f)
+					ModifyDocumentAs(r.Document, f)
 				})
 			}),
 		)
@@ -138,7 +136,7 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 			ra := r.Annotation(idAnnotation)
 			newRL.ForEach(func(nr *Resource) {
 				if nr.Annotation(idAnnotation) == ra {
-					r.doc = nr.doc
+					r.Document = nr.Document
 				}
 			})
 		})
@@ -164,38 +162,6 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 			if r.Annotation(idAnnotation) == "" {
 				rl.Append(*r)
 			}
-		})
-	}
-}
-
-func RegexReplaceTransformer(pattern string, replacement string) Transformer {
-	return func(rl *ResourceList) {
-		filter := searchreplace.SearchReplace{
-			ByValueRegex: pattern,
-			PutValue:     replacement,
-		}
-
-		rl.ForEach(func(r *Resource) {
-			ModifyResourceAs(r, func(rnode *yaml.RNode) {
-				_, err := filter.Filter([]*yaml.RNode{rnode})
-				FailOnError(err)
-			})
-		})
-	}
-}
-
-func ValueReplaceTransformer(value string, replacement string) Transformer {
-	return func(rl *ResourceList) {
-		filter := searchreplace.SearchReplace{
-			ByValue:  value,
-			PutValue: replacement,
-		}
-
-		rl.ForEach(func(r *Resource) {
-			ModifyResourceAs(r, func(rnode *yaml.RNode) {
-				_, err := filter.Filter([]*yaml.RNode{rnode})
-				FailOnError(err)
-			})
 		})
 	}
 }
@@ -229,7 +195,7 @@ func HashSuffixedResourceTransformer(name string, t Transformer) Transformer {
 			var newName string
 
 			// Modify hash suffix
-			ModifyResourceAs(r, func(r *yaml.RNode) {
+			ModifyDocumentAs(r.Document, func(r *yaml.RNode) {
 				newHash, err := hasher.Hash(r)
 				if err != nil {
 					panic(err)
@@ -243,49 +209,13 @@ func HashSuffixedResourceTransformer(name string, t Transformer) Transformer {
 		for key, newName := range nameMappings {
 			rl.ApplyTransformer(FilteredTransformer(
 				NamespaceMatcher(key.Namespace),
-				ValueReplaceTransformer(key.Name, newName),
+				func(rl *ResourceList) {
+					rl.ForEach(func(r *Resource) {
+						r.RegexReplaceValues(key.Name, newName)
+					})
+				},
 			))
 		}
-	}
-}
-
-func ReplacePathsTransformer(path string, v any) Transformer {
-	return func(rl *ResourceList) {
-		rl.ForEach(func(r *Resource) {
-			ModifyResourceAs(r, func(rnode *yaml.RNode) {
-				bytes, err := yaml.Marshal(v)
-				if err != nil {
-					FailOnError(fmt.Errorf("value cannot be serialized as yaml: %w", err))
-				}
-
-				value, err := yaml.Parse(string(bytes))
-				if err != nil {
-					panic(err)
-				}
-
-				targetFieldList, err := rnode.Pipe(&yaml.PathMatcher{Path: utils.SmarterPathSplitter(path, "."), Create: value.YNode().Kind})
-				if err != nil {
-					FailOnError(fmt.Errorf("failed to find finds: %w", err))
-				}
-
-				targetFields, err := targetFieldList.Elements()
-				if err != nil {
-					panic(err)
-				}
-				if len(targetFields) == 0 {
-					FailOnError(fmt.Errorf("failed to match any fields"))
-				}
-
-				for _, targetField := range targetFields {
-					if targetField.YNode().Kind == yaml.ScalarNode {
-						// For scalar, only copy the value (leave any type intact to auto-convert int->string or string->int)
-						targetField.YNode().Value = value.YNode().Value
-					} else {
-						targetField.SetYNode(value.YNode())
-					}
-				}
-			})
-		})
 	}
 }
 
@@ -439,7 +369,7 @@ func generate(o Overlay) ResourceList {
 
 func DigestImages(rl *ResourceList) {
 	rl.ForEach(func(r *Resource) {
-		ModifyResourceAs(r, func(r *yaml.RNode) {
+		ModifyDocumentAs(r.Document, func(r *yaml.RNode) {
 			resolve.ImageTags(context.TODO(), logr.Discard(), nil, r, nil)
 		})
 	})

@@ -42,7 +42,7 @@ func (k kustomizePublisher) Publish(resources ResourceList) error {
 	rm := resmap.New()
 	resources.ForEach(func(r *Resource) {
 		rm.Append(&resource.Resource{
-			RNode: NewFromResource[yaml.RNode](*r),
+			RNode: NewFromDocument[yaml.RNode](*r.Document),
 		})
 	})
 	outputDir := localPathOutput()
@@ -82,7 +82,7 @@ func (l localPackagePublisher) Publish(resources ResourceList) error {
 	}
 	nodes := []*yaml.RNode{}
 	resources.ForEach(func(r *Resource) {
-		nodes = append(nodes, NewFromResource[*yaml.RNode](*r))
+		nodes = append(nodes, NewFromDocument[*yaml.RNode](*r.Document))
 	})
 	return writer.Write(nodes)
 }

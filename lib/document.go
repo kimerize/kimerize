@@ -3,13 +3,77 @@ package lib
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
+	"github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/search-replace/searchreplace"
 	k8sjson "sigs.k8s.io/json"
+	"sigs.k8s.io/kustomize/kyaml/utils"
+	"sigs.k8s.io/kustomize/kyaml/yaml"
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 type Document struct {
 	object map[string]any
+}
+
+func (d *Document) RegexReplaceValues(value, replacement string) {
+	filter := searchreplace.SearchReplace{
+		ByValueRegex: value,
+		PutValue:     replacement,
+	}
+
+	ModifyDocumentAs(d, func(rnode *yaml.RNode) {
+		_, err := filter.Filter([]*yaml.RNode{rnode})
+		FailOnError(err)
+	})
+}
+
+func (d *Document) ReplaceValues(value, replacement string) {
+	filter := searchreplace.SearchReplace{
+		ByValue:  value,
+		PutValue: replacement,
+	}
+
+	ModifyDocumentAs(d, func(rnode *yaml.RNode) {
+		_, err := filter.Filter([]*yaml.RNode{rnode})
+		FailOnError(err)
+	})
+}
+
+func (d *Document) ReplacePaths(path string, v any) {
+	ModifyDocumentAs(d, func(rnode *yaml.RNode) {
+		bytes, err := yaml.Marshal(v)
+		if err != nil {
+			FailOnError(fmt.Errorf("value cannot be serialized as yaml: %w", err))
+		}
+
+		value, err := yaml.Parse(string(bytes))
+		if err != nil {
+			panic(err)
+		}
+
+		targetFieldList, err := rnode.Pipe(&yaml.PathMatcher{Path: utils.SmarterPathSplitter(path, "."), Create: value.YNode().Kind})
+		if err != nil {
+			FailOnError(fmt.Errorf("failed to find finds: %w", err))
+		}
+
+		targetFields, err := targetFieldList.Elements()
+		if err != nil {
+			panic(err)
+		}
+		if len(targetFields) == 0 {
+			FailOnError(fmt.Errorf("failed to match any fields"))
+		}
+
+		for _, targetField := range targetFields {
+			if targetField.YNode().Kind == yaml.ScalarNode {
+				// For scalar, only copy the value (leave any type intact to auto-convert int->string or string->int)
+				targetField.YNode().Value = value.YNode().Value
+			} else {
+				targetField.SetYNode(value.YNode())
+			}
+		}
+	})
 }
 
 func NewDocumentFrom[T any](o T) Document {
