@@ -18,20 +18,105 @@ func NewResource(o interface{}) Resource {
 	}
 }
 
-func (r *Resource) Kind() string {
-	return r.rnode().GetKind()
+func (r *Resource) ApiVersion() (string, bool) {
+	v, ok := r.object["apiVersion"]
+	if !ok {
+		FailOnError(fmt.Errorf("apiVersion not found"))
+	}
+	s, ok := v.(string)
+	if !ok {
+		FailOnError(fmt.Errorf("apiVersion is not a string"))
+	}
+	return s, true
 }
 
-func (r *Resource) Name() string {
-	return r.rnode().GetName()
+func (r *Resource) Kind() (string, bool) {
+	v, ok := r.object["kind"]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	if !ok {
+		FailOnError(fmt.Errorf("kind is not a string"))
+	}
+	return s, true
 }
 
-func (r *Resource) Namespace() string {
-	return r.rnode().GetNamespace()
+func (r *Resource) metadata() map[string]interface{} {
+	v, ok := r.object["metadata"]
+	if !ok {
+		return map[string]interface{}{}
+	}
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		FailOnError(fmt.Errorf("metadata not an object"))
+	}
+	return m
+
 }
 
-func (r *Resource) Annotation(key string) string {
-	return r.rnode().GetAnnotations()[key]
+func (r *Resource) Name() (string, bool) {
+	v, ok := r.metadata()["name"]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	if !ok {
+		FailOnError(fmt.Errorf("name is not a string"))
+	}
+	return s, true
+}
+
+func (r *Resource) Namespace() (string, bool) {
+	v, ok := r.metadata()["namespace"]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	if !ok {
+		FailOnError(fmt.Errorf("namespace is not a string"))
+	}
+	return s, true
+}
+
+func (r *Resource) Annotation(key string) (string, bool) {
+	av, ok := r.metadata()["annotations"]
+	if !ok {
+		return "", false
+	}
+	annotations, ok := av.(map[string]interface{})
+	if !ok {
+		FailOnError(fmt.Errorf("annotations not an object"))
+	}
+	v, ok := annotations[key]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	if !ok {
+		FailOnError(fmt.Errorf("annotation is not a string"))
+	}
+	return s, true
+}
+
+func (r *Resource) Label(key string) (string, bool) {
+	av, ok := r.metadata()["labels"]
+	if !ok {
+		return "", false
+	}
+	labels, ok := av.(map[string]interface{})
+	if !ok {
+		FailOnError(fmt.Errorf("labels not an object"))
+	}
+	v, ok := labels[key]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	if !ok {
+		FailOnError(fmt.Errorf("label is not a string"))
+	}
+	return s, true
 }
 
 func (r *Resource) ApplyTransformer(t Transformer) {
@@ -94,18 +179,21 @@ func (r *Resource) SetNamespace(namespace string) {
 
 // String implements fmt.Stringer.
 func (r Resource) String() string {
-	rnode := r.rnode()
+	apiVersion, _ := r.ApiVersion()
+	kind, _ := r.Kind()
+	namespace, _ := r.Namespace()
+	name, _ := r.Name()
 	return fmt.Sprintf(
 		"%s/%s %s/%s",
-		rnode.GetApiVersion(), rnode.GetKind(), rnode.GetNamespace(), rnode.GetName(),
+		apiVersion, kind, namespace, name,
 	)
 }
 
 var _ fmt.Stringer = Resource{}
 
-func (r *Resource) rnode() *kyaml.RNode {
-	return NewFromDocument[*kyaml.RNode](*r.Document)
-}
+// func (r *Resource) rnode() *kyaml.RNode {
+// 	return NewFromDocument[*kyaml.RNode](*r.Document)
+// }
 
 func (r *Resource) Copy() *Resource {
 	rnode := NewFromDocument[*kyaml.RNode](*r.Document)
@@ -144,14 +232,20 @@ func (rl *ResourceList) ForEach(f func(*Resource)) {
 
 func checkDuplicates(resources []*Resource, r Resource) error {
 	for _, existing := range resources {
-		existingRnode := existing.rnode()
-		rnode := r.rnode()
-		existingGroup, _ := resid.ParseGroupVersion(existingRnode.GetApiVersion())
-		rGroup, _ := resid.ParseGroupVersion(rnode.GetApiVersion())
+		existingApiVersion, _ := existing.ApiVersion()
+		rApiVersion, _ := r.ApiVersion()
+		existingGroup, _ := resid.ParseGroupVersion(existingApiVersion)
+		rGroup, _ := resid.ParseGroupVersion(rApiVersion)
+		existingKind, _ := existing.Kind()
+		rKind, _ := r.Kind()
+		existingName, _ := existing.Name()
+		rName, _ := r.Name()
+		existingNamespace, _ := existing.Namespace()
+		rNamespace, _ := r.Namespace()
 		if existingGroup == rGroup &&
-			existingRnode.GetKind() == rnode.GetKind() &&
-			existingRnode.GetName() == rnode.GetName() &&
-			existingRnode.GetNamespace() == rnode.GetNamespace() {
+			existingKind == rKind &&
+			existingName == rName &&
+			existingNamespace == rNamespace {
 			return fmt.Errorf(
 				"resource %s already exists in list",
 				r,

@@ -9,6 +9,7 @@ import (
 	k8sjson "sigs.k8s.io/json"
 	"sigs.k8s.io/kustomize/kyaml/utils"
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
+	"sigs.k8s.io/yaml"
 )
 
 type Document struct {
@@ -73,6 +74,14 @@ func (d *Document) ReplacePaths(path string, v any) {
 			}
 		}
 	})
+}
+
+func (d *Document) YAML() string {
+	yml, err := yaml.Marshal(d.object)
+	if err != nil {
+		FailOnError(fmt.Errorf("failed to marshal object: %w", err))
+	}
+	return string(yml)
 }
 
 func NewDocument[T any](o T) Document {

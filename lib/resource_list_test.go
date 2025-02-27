@@ -82,10 +82,10 @@ spec:
 	})
 
 	assert.Equal(t, 4, len(rl.resources))
-	assert.Equal(t, "cm1-9922d695f7", rl.resources[0].rnode().GetName())
-	assert.Equal(t, "cm1-798k5k7g9f", rl.resources[1].rnode().GetName())
+	assert.Equal(t, "cm1-9922d695f7", NewFromDocument[*yaml.RNode](*rl.resources[0].Document).GetName())
+	assert.Equal(t, "cm1-798k5k7g9f", NewFromDocument[*yaml.RNode](*rl.resources[1].Document).GetName())
 
 	path := []string{"spec", "containers", "[name=test]", "envFrom", "0", "configMapRef", "name"}
-	assertPath(t, path, rl.resources[2].rnode(), "cm1-9922d695f7")
-	assertPath(t, path, rl.resources[3].rnode(), "cm1-798k5k7g9f")
+	assertPath(t, path, NewFromDocument[*yaml.RNode](*rl.resources[2].Document), "cm1-9922d695f7")
+	assertPath(t, path, NewFromDocument[*yaml.RNode](*rl.resources[3].Document), "cm1-798k5k7g9f")
 }

@@ -109,7 +109,7 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 		rl.ForEach(func(r *Resource) {
 			r.SetAnnotation(idAnnotation, fmt.Sprint(counter))
 			filename := fmt.Sprintf("resource-%d.yaml", counter)
-			files[filename] = r.rnode().MustString()
+			files[filename] = r.YAML()
 			pk.Resources = append(pk.Resources, filename)
 			counter++
 		})
@@ -133,9 +133,9 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 
 		// Update resources with new resources
 		rl.ForEach(func(r *Resource) {
-			ra := r.Annotation(idAnnotation)
+			ra, _ := r.Annotation(idAnnotation)
 			newRL.ForEach(func(nr *Resource) {
-				if nr.Annotation(idAnnotation) == ra {
+				if nra, _ := nr.Annotation(idAnnotation); nra == ra {
 					r.Document = nr.Document
 				}
 			})
@@ -143,10 +143,10 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 
 		// Remove resources that are not in the new resource list
 		rl.RemoveAll(func(r *Resource) bool {
-			ra := r.Annotation(idAnnotation)
+			ra, _ := r.Annotation(idAnnotation)
 			found := false
 			newRL.ForEach(func(nr *Resource) {
-				if nr.Annotation(idAnnotation) == ra {
+				if nra, _ := nr.Annotation(idAnnotation); nra == ra {
 					found = true
 				}
 			})
@@ -159,7 +159,7 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 
 		// Add new resources
 		newRL.ForEach(func(r *Resource) {
-			if r.Annotation(idAnnotation) == "" {
+			if _, ok := r.Annotation(idAnnotation); !ok {
 				rl.Append(*r)
 			}
 		})
@@ -173,7 +173,7 @@ func HashSuffixedResourceTransformer(name string, t Transformer) Transformer {
 		nameMappings := map[k8stypes.NamespacedName]string{}
 		re := regexp.MustCompile(`(^.+)-([a-z0-9]{10})$`)
 		rl.ForEach(func(r *Resource) {
-			rnode := r.rnode()
+			rnode := NewFromDocument[*yaml.RNode](*r.Document)
 			if match := re.FindStringSubmatch(rnode.GetName()); match != nil {
 				if name != match[1] {
 					return
@@ -190,7 +190,7 @@ func HashSuffixedResourceTransformer(name string, t Transformer) Transformer {
 
 			r.ApplyTransformer(t)
 
-			rnode = r.rnode()
+			rnode = NewFromDocument[*yaml.RNode](*r.Document)
 			oldName := rnode.GetName()
 			var newName string
 
@@ -231,15 +231,17 @@ func FilteredTransformer(f Matcher, t Transformer) Transformer {
 	}
 }
 
-func NamespaceMatcher(ns string) Matcher {
+func NamespaceMatcher(namespace string) Matcher {
 	return func(r *Resource) bool {
-		return r.Namespace() == ns
+		n, ok := r.Namespace()
+		return ok && n == namespace
 	}
 }
 
 func NameMatcher(name string) Matcher {
 	return func(r *Resource) bool {
-		return r.Name() == name
+		n, ok := r.Name()
+		return ok && n == name
 	}
 }
 
@@ -273,9 +275,7 @@ func NotMatcher(matcher Matcher) Matcher {
 
 func LabelMatcher(key, value string) Matcher {
 	return func(r *Resource) bool {
-		rnode := r.rnode()
-		labels := rnode.GetLabels()
-		lv, ok := labels[key]
+		lv, ok := r.Label(key)
 		return ok && lv == value
 	}
 }
@@ -283,7 +283,8 @@ func LabelMatcher(key, value string) Matcher {
 func KindMatcher[T any]() Matcher {
 	kind := reflect.TypeOf((*T)(nil)).Elem().Name()
 	return func(r *Resource) bool {
-		return r.rnode().GetKind() == kind
+		k, ok := r.Kind()
+		return ok && k == kind
 	}
 }
 
