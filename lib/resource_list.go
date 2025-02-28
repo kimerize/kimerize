@@ -255,22 +255,17 @@ func checkDuplicates(resources []*Resource, r Resource) error {
 	return nil
 }
 
-func (rl *ResourceList) Append(r Resource) error {
+func (rl *ResourceList) Append(r Resource) {
 	if err := checkDuplicates(rl.resources, r); err != nil {
-		return err
+		FailOnError(err)
 	}
-
 	rl.resources = append(rl.resources, &r)
-	return nil
 }
 
-func (rl *ResourceList) Absorb(other ResourceList) error {
+func (rl *ResourceList) Absorb(other ResourceList) {
 	for _, r := range other.resources {
-		if err := rl.Append(*r); err != nil {
-			return err
-		}
+		rl.Append(*r)
 	}
-	return nil
 }
 
 func NewResourceList() *ResourceList {
