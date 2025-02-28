@@ -46,9 +46,6 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 	if !filepath.IsLocal(path) {
 		FailOnError(fmt.Errorf("path must be local"))
 	}
-	options := krusty.MakeDefaultOptions()
-	options.PluginConfig.HelmConfig.Enabled = true
-	options.PluginConfig.HelmConfig.Command = "helm"
 
 	tmpDir, err := os.MkdirTemp("", "kustomize-*")
 	if err != nil {
@@ -83,8 +80,15 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 		FailOnError(err)
 	}
 
+	return BuildKustomizeDir(filepath.Join(tmpDir, path))
+}
+
+func BuildKustomizeDir(path string) (result ResourceList) {
+	options := krusty.MakeDefaultOptions()
+	options.PluginConfig.HelmConfig.Enabled = true
+	options.PluginConfig.HelmConfig.Command = "helm"
 	k := krusty.MakeKustomizer(options)
-	rm, err := k.Run(fs, filepath.Join(tmpDir, path))
+	rm, err := k.Run(filesys.MakeFsOnDisk(), filepath.Join(path, "."))
 	if err != nil {
 		FailOnError(err)
 	}
