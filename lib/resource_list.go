@@ -177,6 +177,18 @@ func (r *Resource) SetNamespace(namespace string) {
 	})
 }
 
+func (r *Resource) AddHashSuffix() {
+	ModifyDocumentAs(r.Document, func(r *kyaml.RNode) {
+		newHash, err := hasher.Hash(r)
+		if err != nil {
+			FailOnError(err)
+		}
+		if err := r.SetName(r.GetName() + "-" + newHash); err != nil {
+			FailOnError(err)
+		}
+	})
+}
+
 // String implements fmt.Stringer.
 func (r Resource) String() string {
 	apiVersion, _ := r.ApiVersion()
