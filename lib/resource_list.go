@@ -199,10 +199,6 @@ func (r Resource) String() string {
 
 var _ fmt.Stringer = Resource{}
 
-// func (r *Resource) rnode() *kyaml.RNode {
-// 	return NewFromDocument[*kyaml.RNode](*r.Document)
-// }
-
 func (r *Resource) Copy() *Resource {
 	rnode := NewFromDocument[*kyaml.RNode](*r.Document)
 	doc := NewDocument(rnode.Copy())
