@@ -153,15 +153,15 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 			return !found
 		})
 
-		rl.ForEach(func(r *Resource) {
-			r.ClearAnnotation(idAnnotation)
-		})
-
 		// Add new resources
 		newRL.ForEach(func(r *Resource) {
 			if _, ok := r.Annotation(idAnnotation); !ok {
 				rl.Append(*r)
 			}
+		})
+
+		rl.ForEach(func(r *Resource) {
+			r.ClearAnnotation(idAnnotation)
 		})
 	}
 }
