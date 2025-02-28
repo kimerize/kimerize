@@ -54,7 +54,9 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 	if err != nil {
 		FailOnError(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		go os.RemoveAll(tmpDir)
+	}()
 
 	inMemoryFileSystem := kimerize_filesys.MakeFsInMemory()
 	if err := buildFS(inMemoryFileSystem); err != nil {
