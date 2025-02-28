@@ -233,15 +233,13 @@ func FilteredTransformer(f Matcher, t Transformer) Transformer {
 
 func NamespaceMatcher(namespace string) Matcher {
 	return func(r *Resource) bool {
-		n, ok := r.Namespace()
-		return ok && n == namespace
+		return r.Namespace() == namespace
 	}
 }
 
 func NameMatcher(name string) Matcher {
 	return func(r *Resource) bool {
-		n, ok := r.Name()
-		return ok && n == name
+		return r.Name() == name
 	}
 }
 
@@ -283,8 +281,7 @@ func LabelMatcher(key, value string) Matcher {
 func KindMatcher[T any]() Matcher {
 	kind := reflect.TypeOf((*T)(nil)).Elem().Name()
 	return func(r *Resource) bool {
-		k, ok := r.Kind()
-		return ok && k == kind
+		return r.Kind() == kind
 	}
 }
 

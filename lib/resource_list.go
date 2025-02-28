@@ -18,7 +18,7 @@ func NewResource(o interface{}) Resource {
 	}
 }
 
-func (r *Resource) ApiVersion() (string, bool) {
+func (r *Resource) ApiVersion() string {
 	v, ok := r.object["apiVersion"]
 	if !ok {
 		FailOnError(fmt.Errorf("apiVersion not found"))
@@ -27,19 +27,19 @@ func (r *Resource) ApiVersion() (string, bool) {
 	if !ok {
 		FailOnError(fmt.Errorf("apiVersion is not a string"))
 	}
-	return s, true
+	return s
 }
 
-func (r *Resource) Kind() (string, bool) {
+func (r *Resource) Kind() string {
 	v, ok := r.object["kind"]
 	if !ok {
-		return "", false
+		FailOnError(fmt.Errorf("kind not found"))
 	}
 	s, ok := v.(string)
 	if !ok {
 		FailOnError(fmt.Errorf("kind is not a string"))
 	}
-	return s, true
+	return s
 }
 
 func (r *Resource) metadata() map[string]interface{} {
@@ -55,28 +55,28 @@ func (r *Resource) metadata() map[string]interface{} {
 
 }
 
-func (r *Resource) Name() (string, bool) {
+func (r *Resource) Name() string {
 	v, ok := r.metadata()["name"]
 	if !ok {
-		return "", false
+		FailOnError(fmt.Errorf("name not found"))
 	}
 	s, ok := v.(string)
 	if !ok {
 		FailOnError(fmt.Errorf("name is not a string"))
 	}
-	return s, true
+	return s
 }
 
-func (r *Resource) Namespace() (string, bool) {
+func (r *Resource) Namespace() string {
 	v, ok := r.metadata()["namespace"]
 	if !ok {
-		return "", false
+		return ""
 	}
 	s, ok := v.(string)
 	if !ok {
 		FailOnError(fmt.Errorf("namespace is not a string"))
 	}
-	return s, true
+	return s
 }
 
 func (r *Resource) Annotation(key string) (string, bool) {
@@ -191,13 +191,9 @@ func (r *Resource) AddHashSuffix() {
 
 // String implements fmt.Stringer.
 func (r Resource) String() string {
-	apiVersion, _ := r.ApiVersion()
-	kind, _ := r.Kind()
-	namespace, _ := r.Namespace()
-	name, _ := r.Name()
 	return fmt.Sprintf(
 		"%s/%s %s/%s",
-		apiVersion, kind, namespace, name,
+		r.ApiVersion(), r.Kind(), r.Namespace(), r.Name(),
 	)
 }
 
@@ -244,20 +240,14 @@ func (rl *ResourceList) ForEach(f func(*Resource)) {
 
 func checkDuplicates(resources []*Resource, r Resource) error {
 	for _, existing := range resources {
-		existingApiVersion, _ := existing.ApiVersion()
-		rApiVersion, _ := r.ApiVersion()
+		existingApiVersion := existing.ApiVersion()
+		rApiVersion := r.ApiVersion()
 		existingGroup, _ := resid.ParseGroupVersion(existingApiVersion)
 		rGroup, _ := resid.ParseGroupVersion(rApiVersion)
-		existingKind, _ := existing.Kind()
-		rKind, _ := r.Kind()
-		existingName, _ := existing.Name()
-		rName, _ := r.Name()
-		existingNamespace, _ := existing.Namespace()
-		rNamespace, _ := r.Namespace()
 		if existingGroup == rGroup &&
-			existingKind == rKind &&
-			existingName == rName &&
-			existingNamespace == rNamespace {
+			existing.Kind() == r.Kind() &&
+			existing.Name() == r.Name() &&
+			existing.Namespace() == r.Namespace() {
 			return fmt.Errorf(
 				"resource %s already exists in list",
 				r,
