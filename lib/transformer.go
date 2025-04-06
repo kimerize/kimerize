@@ -1,19 +1,18 @@
 package lib
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strings"
 
-	"github.com/go-logr/logr"
-	"github.com/google/k8s-digester/pkg/resolve"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	kustomize_hasher "sigs.k8s.io/kustomize/api/hasher"
 	"sigs.k8s.io/kustomize/api/konfig"
 	kusttypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
+	"sigs.k8s.io/kustomize/kyaml/fn/runtime/runtimeutil"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
@@ -164,6 +163,40 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 			r.ClearAnnotation(idAnnotation)
 		})
 	}
+}
+
+func ExecFunctionSpec(exec runtimeutil.ExecSpec) runtimeutil.FunctionSpec {
+	return runtimeutil.FunctionSpec{
+		Exec: exec,
+	}
+}
+
+func GoToolKRMFunction(tool string, args ...string) runtimeutil.FunctionSpec {
+	return ExecFunctionSpec(runtimeutil.ExecSpec{
+		Path: "bash",
+		Args: append([]string{"-c", "cd $GO_PKG; go tool " + tool + " " + strings.Join(args, " ")}, args...),
+		Env: []string{
+			"GO_PKG=" + GetMainPkg().Dir,
+		},
+	})
+}
+
+func KRMFunctionTransformer(spec runtimeutil.FunctionSpec, functionConfig *Resource) Transformer {
+	if functionConfig == nil {
+		d := NewDocument(map[string]any{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]any{
+				"name": "kustomize-function",
+			},
+		})
+		functionConfig = &Resource{Document: &d}
+	}
+	runtimeConfig := NewDocument(spec)
+	functionConfig.SetAnnotation("config.kubernetes.io/function", runtimeConfig.YAML())
+	return KustomizeComponentTransformer(kusttypes.Kustomization{
+		Transformers: []string{string(functionConfig.YAML())},
+	})
 }
 
 var hasher = &kustomize_hasher.Hasher{}
@@ -365,10 +398,6 @@ func generate(o Overlay) ResourceList {
 	return *result
 }
 
-func DigestImages(rl *ResourceList) {
-	rl.ForEach(func(r *Resource) {
-		ModifyDocumentAs(r.Document, func(r *yaml.RNode) {
-			resolve.ImageTags(context.TODO(), logr.Discard(), nil, r, nil)
-		})
-	})
+func DigestImagesTransformer() Transformer {
+	return KRMFunctionTransformer(GoToolKRMFunction("github.com/google/k8s-digester"), nil)
 }

@@ -6,6 +6,6 @@ import (
 
 func CompanyTransforms() []Transformer {
 	return []Transformer{
-		DigestImages,
+		DigestImagesTransformer(),
 	}
 }

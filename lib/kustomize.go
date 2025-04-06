@@ -85,8 +85,10 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 
 func BuildKustomizeDir(path string) (result ResourceList) {
 	options := krusty.MakeDefaultOptions()
+	options.PluginConfig = types.EnabledPluginConfig(types.BploUseStaticallyLinked)
 	options.PluginConfig.HelmConfig.Enabled = true
 	options.PluginConfig.HelmConfig.Command = "helm"
+	options.PluginConfig.FnpLoadingOptions.EnableExec = true
 	k := krusty.MakeKustomizer(options)
 	rm, err := k.Run(filesys.MakeFsOnDisk(), filepath.Join(path, "."))
 	if err != nil {
