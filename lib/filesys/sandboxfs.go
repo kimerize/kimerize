@@ -2,6 +2,7 @@ package filesys
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -119,6 +120,10 @@ func (s *SandboxFS) Walk(path string, walkFn filepath.WalkFunc) error {
 // WriteFile implements filesys.FileSystem.
 func (s *SandboxFS) WriteFile(path string, data []byte) error {
 	return filesys.MakeFsOnDisk().WriteFile(path, data)
+}
+
+func (s *SandboxFS) Delete() {
+	os.RemoveAll(s.sandboxRoot)
 }
 
 var _ filesys.FileSystem = &SandboxFS{}

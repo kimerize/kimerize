@@ -52,6 +52,7 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 	}
 
 	fs, err := kimerize_filesys.NewSandboxFS(inMemoryFileSystem, "")
+	defer fs.Delete()
 	FailOnError(err)
 
 	return BuildKustomizeDir(fs, path)
