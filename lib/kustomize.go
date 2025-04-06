@@ -55,10 +55,10 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 	defer fs.Delete()
 	FailOnError(err)
 
-	return BuildKustomizeDir(fs, path)
+	return buildKustomizeDir(fs, path)
 }
 
-func BuildKustomizeDir(fs filesys.FileSystem, path string) (result ResourceList) {
+func buildKustomizeDir(fs filesys.FileSystem, path string) (result ResourceList) {
 	options := krusty.MakeDefaultOptions()
 	options.PluginConfig = types.EnabledPluginConfig(types.BploUseStaticallyLinked)
 	options.PluginConfig.HelmConfig.Enabled = true
@@ -73,6 +73,10 @@ func BuildKustomizeDir(fs filesys.FileSystem, path string) (result ResourceList)
 		result.Append(NewResource(r.RNode))
 	}
 	return
+}
+
+func BuildKustomizeDir(path string) ResourceList {
+	return buildKustomizeDir(filesys.MakeFsOnDisk(), path)
 }
 
 func EmbedFilesysBuilder(embedFS embed.FS) func(filesys.FileSystem) error {
