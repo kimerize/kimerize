@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 
 	kimerize_filesys "github.com/kimerize/kimerize/lib/filesys"
@@ -47,50 +46,26 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 		FailOnError(fmt.Errorf("path must be local"))
 	}
 
-	tmpDir, err := os.MkdirTemp("", "kustomize-*")
-	if err != nil {
-		FailOnError(err)
-	}
-	defer func() {
-		go os.RemoveAll(tmpDir)
-	}()
-
 	inMemoryFileSystem := kimerize_filesys.MakeFsInMemory()
 	if err := buildFS(inMemoryFileSystem); err != nil {
 		FailOnError(err)
 	}
 
-	fs := filesys.MakeFsOnDisk()
-	err = inMemoryFileSystem.Walk("/", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return fs.MkdirAll(filepath.Join(tmpDir, path))
-		} else {
-			content, err := inMemoryFileSystem.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			return fs.WriteFile(filepath.Join(tmpDir, path), content)
-		}
-	})
+	fs, err := kimerize_filesys.NewSandboxFS(inMemoryFileSystem, "")
+	defer fs.Delete()
+	FailOnError(err)
 
-	if err != nil {
-		FailOnError(err)
-	}
-
-	return BuildKustomizeDir(filepath.Join(tmpDir, path))
+	return buildKustomizeDir(fs, path)
 }
 
-func BuildKustomizeDir(path string) (result ResourceList) {
+func buildKustomizeDir(fs filesys.FileSystem, path string) (result ResourceList) {
 	options := krusty.MakeDefaultOptions()
 	options.PluginConfig = types.EnabledPluginConfig(types.BploUseStaticallyLinked)
 	options.PluginConfig.HelmConfig.Enabled = true
 	options.PluginConfig.HelmConfig.Command = "helm"
 	options.PluginConfig.FnpLoadingOptions.EnableExec = true
 	k := krusty.MakeKustomizer(options)
-	rm, err := k.Run(filesys.MakeFsOnDisk(), filepath.Join(path, "."))
+	rm, err := k.Run(fs, filepath.Join(path, "."))
 	if err != nil {
 		FailOnError(err)
 	}
@@ -98,6 +73,10 @@ func BuildKustomizeDir(path string) (result ResourceList) {
 		result.Append(NewResource(r.RNode))
 	}
 	return
+}
+
+func BuildKustomizeDir(path string) ResourceList {
+	return buildKustomizeDir(filesys.MakeFsOnDisk(), path)
 }
 
 func EmbedFilesysBuilder(embedFS embed.FS) func(filesys.FileSystem) error {
