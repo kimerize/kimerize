@@ -98,6 +98,13 @@ func NewDocument[T any](o T) Document {
 		return o
 	case map[string]any:
 		document.object = o
+	case string:
+		var b []byte
+		b, err = yaml.YAMLToJSON([]byte(o))
+		if err != nil {
+			break
+		}
+		err = json.Unmarshal(b, &document.object)
 	default:
 		var b []byte
 		b, err = json.Marshal(o)
