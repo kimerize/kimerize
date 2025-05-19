@@ -13,24 +13,26 @@ import (
 type HelmRenderer struct {
 	// TODO: support embedding a helm chart
 	// EmbeddedChart embed.FS
-	values       map[string]any
-	Name         string
-	Namespace    string
-	ReleaseName  string
-	Version      string
-	Repo         string
-	ValuesMerge  string
-	IncludeCRDs  bool
-	SkipHooks    bool
-	ApiVersions  []string
-	KubeVersion  string
-	NameTemplate string
-	SkipTests    bool
-	Debug        bool
+	values         map[string]any
+	Name           string         `json:"name"`
+	Namespace      string         `json:"namespace"`
+	ReleaseName    string         `json:"releaseName"`
+	Version        string         `json:"version"`
+	Repo           string         `json:"repo"`
+	ValuesMerge    string         `json:"valuesMerge"`
+	IncludeCRDs    bool           `json:"includeCRDs"`
+	SkipHooks      bool           `json:"skipHooks"`
+	ApiVersions    []string       `json:"apiVersions"`
+	KubeVersion    string         `json:"kubeVersion"`
+	NameTemplate   string         `json:"nameTemplate"`
+	SkipTests      bool           `json:"skipTests"`
+	Debug          bool           `json:"debug"`
+	ValuesOverride map[string]any `json:"valuesOverride"`
 }
 
 // Transform implements lib.Overlay.
 func (h HelmRenderer) Transform(items *lib.ResourceList) {
+	h.OverrideValues(h.ValuesOverride)
 	items.Absorb(
 		lib.BuildKustomization(
 			types.Kustomization{

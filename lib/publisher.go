@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/api/resource"
@@ -94,10 +96,13 @@ func LocalPackageWriter() localPackagePublisher {
 var _ PackagePublisher = localPackagePublisher{}
 
 func localPathOutput() string {
-	p := GetMainPkg()
-	pkgRelPath, err := filepath.Rel(p.Module.Dir, p.Dir)
-	if err != nil {
-		panic(err)
-	}
-	return filepath.Join(p.Module.Dir, "zz_generated", pkgRelPath)
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	out, err := cmd.CombinedOutput()
+	FailOnError(err)
+	gitRoot := strings.TrimSpace(string(out))
+	wd, err := os.Getwd()
+	FailOnError(err)
+	pkgRelPath, err := filepath.Rel(gitRoot, wd)
+	FailOnError(err)
+	return filepath.Join(gitRoot, "zz_generated", pkgRelPath)
 }

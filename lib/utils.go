@@ -38,7 +38,7 @@ func FailOnError(err error) {
 	defer func() {
 		// Getting main package might fail
 		if r := recover(); r != nil {
-			tracerr.Print(tracerr.Wrap(err))
+			fmt.Fprintln(os.Stderr, tracerr.Sprint(tracerr.Wrap(err)))
 			os.Exit(1)
 		}
 	}()
@@ -55,5 +55,5 @@ func printStackTrace(p packages.Package, err tracerr.Error) {
 			frames = append(frames, f)
 		}
 	}
-	tracerr.PrintSourceColor(tracerr.CustomError(err, frames))
+	fmt.Fprintln(os.Stderr, tracerr.SprintSourceColor(tracerr.CustomError(err, frames)))
 }

@@ -2,6 +2,7 @@ package lib
 
 import (
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -92,9 +93,22 @@ func KindTransformer[T any](f func(*T)) Transformer {
 	}
 }
 
-// TODO: Optionally add files
 func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
-	k.Kind = "Component"
+	return KustomizeComponentFromFilesysTransformer(func(targetFS filesys.FileSystem) error {
+		k.Kind = "Component"
+		kBytes, err := yaml.Marshal(k)
+		if err != nil {
+			return err
+		}
+		err = targetFS.WriteFile(konfig.RecognizedKustomizationFileNames()[0], kBytes)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+func KustomizeComponentFromFilesysTransformer(makeFS func(filesys.FileSystem) error) Transformer {
 	const idAnnotation = "internal.kimerize.io/id"
 	return func(rl *ResourceList) {
 		files := map[string]string{}
@@ -112,21 +126,35 @@ func KustomizeComponentTransformer(k kusttypes.Kustomization) Transformer {
 			pk.Resources = append(pk.Resources, filename)
 			counter++
 		})
-		newRL := BuildKustomization(pk, func(fs filesys.FileSystem) error {
+		newRL := BuildKustomization(pk, func(targetFS filesys.FileSystem) error {
 			for name, content := range files {
-				if err := fs.WriteFile(name, []byte(content)); err != nil {
+				if err := targetFS.WriteFile(name, []byte(content)); err != nil {
 					return err
 				}
 			}
-			fs.MkdirAll(componentDir)
-			kBytes, err := yaml.Marshal(k)
-			if err != nil {
-				return err
-			}
-			err = fs.WriteFile(filepath.Join(componentDir, konfig.RecognizedKustomizationFileNames()[0]), kBytes)
-			if err != nil {
-				return err
-			}
+			targetFS.MkdirAll(componentDir)
+
+			componentFS := filesys.MakeFsInMemory()
+			makeFS(componentFS)
+			componentFS.Walk(".", func(path string, d fs.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if d.IsDir() {
+					if err := targetFS.MkdirAll(filepath.Join(componentDir, path)); err != nil {
+						return err
+					}
+				} else {
+					content, err := componentFS.ReadFile(path)
+					if err != nil {
+						return err
+					}
+					if err := targetFS.WriteFile(filepath.Join(componentDir, path), content); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
 			return nil
 		})
 
