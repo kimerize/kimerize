@@ -4,7 +4,9 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"strings"
 
 	kimerize_filesys "github.com/kimerize/kimerize/lib/filesys"
 	"sigs.k8s.io/kustomize/api/konfig"
@@ -61,8 +63,25 @@ func BuildKustomizeLayer(path string, buildFS func(fs filesys.FileSystem) error)
 func buildKustomizeDir(fs filesys.FileSystem, path string) (result ResourceList) {
 	options := krusty.MakeDefaultOptions()
 	options.PluginConfig = types.EnabledPluginConfig(types.BploUseStaticallyLinked)
+
+	tempDir, err := os.MkdirTemp("", "helm-bin-")
+	FailOnError(err)
+	defer os.RemoveAll(tempDir)
+
+	helmBin := filepath.Join(tempDir, "helm")
+	cwd, err := os.Getwd()
+	FailOnError(err)
+	helmBinScript := fmt.Sprintf(strings.TrimSpace(`
+#!/bin/bash
+
+cd %s
+go tool helm "$@"
+`), cwd)
+	os.WriteFile(helmBin, []byte(helmBinScript), 0755)
+
 	options.PluginConfig.HelmConfig.Enabled = true
-	options.PluginConfig.HelmConfig.Command = "helm"
+	options.PluginConfig.HelmConfig.Command = helmBin
+
 	options.PluginConfig.FnpLoadingOptions.EnableExec = true
 	k := krusty.MakeKustomizer(options)
 	rm, err := k.Run(fs, filepath.Join(path, "."))
