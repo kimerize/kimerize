@@ -81,6 +81,9 @@ go tool helm "$@"
 
 	options.PluginConfig.HelmConfig.Enabled = true
 	options.PluginConfig.HelmConfig.Command = helmBin
+	if kubeVersion := os.Getenv("KIMERIZE_KUBE_VERSION"); kubeVersion != "" {
+		options.PluginConfig.HelmConfig.KubeVersion = kubeVersion
+	}
 
 	options.PluginConfig.FnpLoadingOptions.EnableExec = true
 	k := krusty.MakeKustomizer(options)
