@@ -72,7 +72,7 @@ func buildKustomizeDir(fs filesys.FileSystem, path string) (result ResourceList)
 	cwd, err := os.Getwd()
 	FailOnError(err)
 	helmBinScript := fmt.Sprintf(strings.TrimSpace(`
-#!/bin/bash
+#!/bin/sh
 
 cd %s
 go tool helm "$@"
@@ -81,6 +81,9 @@ go tool helm "$@"
 
 	options.PluginConfig.HelmConfig.Enabled = true
 	options.PluginConfig.HelmConfig.Command = helmBin
+	if kubeVersion := os.Getenv("KIMERIZE__KUSTOMIZE_HELM_KUBE_VERSION"); kubeVersion != "" {
+		options.PluginConfig.HelmConfig.KubeVersion = kubeVersion
+	}
 
 	options.PluginConfig.FnpLoadingOptions.EnableExec = true
 	k := krusty.MakeKustomizer(options)
